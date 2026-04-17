@@ -233,6 +233,14 @@ def build_splitter() -> RecursiveCharacterTextSplitter:
     )
 
 
+def build_fallback_splitter() -> RecursiveCharacterTextSplitter:
+    return RecursiveCharacterTextSplitter(
+        chunk_size=900,
+        chunk_overlap=150,
+        separators=["\n\n", "\n", " ", ""],
+    )
+
+
 def extract_rows_from_chunk(chain, chunk: str, active_fields: list[str]) -> list[dict]:
     try:
         result = chain.invoke({"chunk": chunk, "active_fields": ", ".join(active_fields)})
@@ -246,6 +254,47 @@ def extract_rows_from_chunk(chain, chunk: str, active_fields: list[str]) -> list
     except Exception as e:
         print(f"      [Chain error] {e}")
         return []
+
+
+def extract_rows_with_fallback(
+    chain,
+    chunk: str,
+    active_fields: list[str],
+    fallback_splitter: RecursiveCharacterTextSplitter,
+) -> list[dict]:
+    """Try extraction on full chunk first, then retry with smaller sub-chunks if needed."""
+    primary_rows = extract_rows_from_chunk(chain, chunk, active_fields)
+    if primary_rows or len(chunk) < 700:
+        return primary_rows
+
+    fallback_rows: list[dict] = []
+    sub_chunks = fallback_splitter.split_text(chunk)
+    for sub_chunk in sub_chunks:
+        sub_rows = extract_rows_from_chunk(chain, sub_chunk, active_fields)
+        fallback_rows.extend(sub_rows)
+
+    return fallback_rows
+
+
+def save_page_chunks(chunks_dir: Path, pdf_path: str, page_number: int, chunks: list[str]) -> None:
+    chunks_dir.mkdir(parents=True, exist_ok=True)
+    pdf_stem = Path(pdf_path).stem
+    chunk_file = chunks_dir / f"{pdf_stem}_page_{page_number}.json"
+    payload = {
+        "pdf": str(pdf_path),
+        "page_number": page_number,
+        "chunks_count": len(chunks),
+        "chunks": [
+            {
+                "chunk_index": idx + 1,
+                "char_length": len(chunk),
+                "text": chunk,
+            }
+            for idx, chunk in enumerate(chunks)
+        ],
+    }
+    with open(chunk_file, "w", encoding="utf-8") as fp:
+        json.dump(payload, fp, indent=2, ensure_ascii=False)
 
 
 def deduplicate(rows: list[dict]) -> list[dict]:
@@ -394,10 +443,11 @@ def extract_pages(pdf_path: str) -> list[dict]:
 # ──────────────────────────────────────────────────────────────
 # MAIN PIPELINE
 # ──────────────────────────────────────────────────────────────
-def run_pipeline(pdf_path: str, api_key: str) -> PipelineResult:
+def run_pipeline(pdf_path: str, api_key: str, chunks_dir: Path) -> PipelineResult:
     llm = ChatOpenAI(model=MODEL, temperature=0, api_key=api_key)
     chain = build_chain(llm)
     splitter = build_splitter()
+    fallback_splitter = build_fallback_splitter()
 
     pages = extract_pages(pdf_path)
     results = []
@@ -407,6 +457,8 @@ def run_pipeline(pdf_path: str, api_key: str) -> PipelineResult:
     for page in pages:
         pnum = page["page_number"]
         text = page["text"]
+        chunks = splitter.split_text(text)
+        save_page_chunks(chunks_dir, pdf_path, pnum, chunks)
 
         # ── Layer 2: Page gate ─────────────────────────────────
         passed, page_hits = check_page_for_variants(text)
@@ -420,7 +472,6 @@ def run_pipeline(pdf_path: str, api_key: str) -> PipelineResult:
         pages_passed += 1
 
         # ── Layer 3: Chunk gate → extraction → normalize ──────
-        chunks = splitter.split_text(text)
         all_raw = []
 
         print(f"  [Layer 3] {len(chunks)} chunk(s) scanned with regex gate")
@@ -436,7 +487,7 @@ def run_pipeline(pdf_path: str, api_key: str) -> PipelineResult:
                 end="",
                 flush=True,
             )
-            raw = extract_rows_from_chunk(chain, chunk, active_fields)
+            raw = extract_rows_with_fallback(chain, chunk, active_fields, fallback_splitter)
             print(f" → {len(raw)} row(s)")
             all_raw.extend(raw)
 
@@ -473,6 +524,7 @@ if __name__ == "__main__":
     parser.add_argument("--pdf",     default=None,           help="Path to PDF file (optional; defaults to first PDF in source-dir)")
     parser.add_argument("--api-key", default=None,           help="OpenAI API key (or set OPENAI_API_KEY)")
     parser.add_argument("--output",  default="output.json",  help="Output JSON file")
+    parser.add_argument("--chunks-dir", default="page_chunks", help="Folder to save per-page chunk JSON files")
     args = parser.parse_args()
 
     if args.pdf:
@@ -494,7 +546,8 @@ if __name__ == "__main__":
 
     print(f"PDF selected: {pdf_path}")
 
-    result = run_pipeline(str(pdf_path), key)
+    chunks_dir = Path(args.chunks_dir).resolve()
+    result = run_pipeline(str(pdf_path), key, chunks_dir)
 
     print("=" * 64)
     print("SUMMARY")
@@ -515,6 +568,7 @@ if __name__ == "__main__":
     with open(args.output, "w", encoding="utf-8") as f:
         json.dump(output, f, indent=2, ensure_ascii=False)
     print(f"\nOutput saved → {args.output}")
+    print(f"Chunk files saved → {chunks_dir}")
 
     # Preview first 3 rows
     if result.results:

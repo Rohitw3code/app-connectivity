@@ -1,0 +1,17 @@
+{
+  "pdf": "/home/bittu/Desktop/App-connectivity/start/source_1/test.pdf",
+  "page_number": 2,
+  "chunks_count": 2,
+  "chunks": [
+    {
+      "chunk_index": 1,
+      "char_length": 1769,
+      "text": "Distribution List:\nChief Engineer (PSP&A – I) Member Secretary\nCentral Electricity Authority Northern Regional Power Committee\nSewa Bhawan, R.K.Puram, 18A, Shaheed Jeet Singh\nNew Delhi-110 066 Sansanwal Marg, Katwaria Sarai,\nNew Delhi – 110 016\nDirector (Power System) Director\nSolar Energy Corporation of India Ltd. Ministry of New and Renewable Energy,\nD-3, 1st Floor, A wing, Block 14, CGO Complex,\nReligare Building, District Centre, Lodhi Road, New Delhi-110003\nSaket, New Delhi-110017\nDirector (SO) Executive Director\nGrid Controller of India Limited (erstwhile Northern Regional Load Despatch\nPower System Operation Corporation Centre\nLtd.) 18-A, Qutab Institutional Area,\n9th Floor, IFCI Towers, 61, Shaheed Jeet Singh Sansanwal Marg,\nNehru Place, New Delhi-110 016 Katwaria Sarai, New Delhi– 110 016\nDirector (P&C), Director(W&P)\nHPPTCL, Headoffice, Himfed UP Power Transmission Company Ltd.\nShakti Bhawan Extn,\nBhawan,Panjari,\n3rd floor, 14, Ashok Marg,\nShimla-171005, Himachal Pradesh\nLucknow-226 001\nDirector (Technical) Director (Projects)\nPunjab State Transmission Corporation Power Transmission Corporation of\nLtd. Uttrakhand Ltd.\nHead Office, The Mall, Vidyut Bhawan,\nPatiala 147001, Punjab Near ISBT Crossing,\nSaharanpur Road, Majra, Dehradun.\nDevelopment Commissioner (Power) Director (Technical)\nPower Development Department Rajasthan Rajya Vidyut Prasaran\nGrid Substation Complex, Nigam Ltd.\nJanipur, Jammu Vidyut Bhawan, Jaipur,\nRajasthan-302005.\nMember (Power) Superintending Engineer (Operation)\nBhakra Beas Management Board Electricity Circle, 5th Floor,\nSector-19 B, Madhya Marg, UT Secretariat,\nChandigarh – 160019 Sector-9 D, Chandigarh – 161009\nDirector (Operations) Director (Technical)\nDelhi Transco Ltd. Haryana Vidyut Prasaran Nigam Ltd."
+    },
+    {
+      "chunk_index": 2,
+      "char_length": 345,
+      "text": "Bhakra Beas Management Board Electricity Circle, 5th Floor,\nSector-19 B, Madhya Marg, UT Secretariat,\nChandigarh – 160019 Sector-9 D, Chandigarh – 161009\nDirector (Operations) Director (Technical)\nDelhi Transco Ltd. Haryana Vidyut Prasaran Nigam Ltd.\nShakti Sadan, Kotla Road, Shakti Bhawan, Sector-6,\nNew Delhi-110 002 Panchkula-134109, Haryana"
+    }
+  ]
+}
