@@ -13,63 +13,47 @@
           "Project Location": "Jodhpur distt., Rajasthan",
           "State": "rajasthan",
           "substaion": "Bhadla-III PS",
-          "Name of the developers": "Renew Power Private Limited",
+          "Name of the developers": "RE Power Private Limited",
           "GNA/ST II Application ID": "2200000516",
           "LTA Application ID": null,
-          "Application Quantum (MW)(ST II)": "300"
+          "Application Quantum (MW)(ST II)": "300",
+          "Nature of Applicant": "Generator (Solar)",
+          "Mode(Criteria for applying)": "SECI LOA",
+          "Applied Start of Connectivity sought by developer date": "30.09.2026",
+          "Application/Submission Date": "25.01.2024"
         },
         {
           "Project Location": "Jodhpur distt., Rajasthan",
           "State": "rajasthan",
           "substaion": "Bhadla-III PS",
-          "Name of the developers": "Renew Power Private Limited",
+          "Name of the developers": "RE Power Private Limited",
           "GNA/ST II Application ID": "2200000521",
           "LTA Application ID": null,
-          "Application Quantum (MW)(ST II)": "200"
+          "Application Quantum (MW)(ST II)": "200",
+          "Nature of Applicant": "Generator (Solar)",
+          "Mode(Criteria for applying)": "SJVN LOA",
+          "Applied Start of Connectivity sought by developer date": "31.05.2026",
+          "Application/Submission Date": "25.01.2024"
         },
         {
           "Project Location": "Jodhpur distt., Rajasthan",
           "State": "rajasthan",
           "substaion": "Bhadla-III PS",
-          "Name of the developers": "Renew Power Private Limited",
+          "Name of the developers": "RE Power Private Limited",
           "GNA/ST II Application ID": "2200000522",
           "LTA Application ID": null,
-          "Application Quantum (MW)(ST II)": "300"
+          "Application Quantum (MW)(ST II)": "300",
+          "Nature of Applicant": "Generator (Solar)",
+          "Mode(Criteria for applying)": "SJVN LOA",
+          "Applied Start of Connectivity sought by developer date": "31.05.2026",
+          "Application/Submission Date": "25.01.2024"
         }
       ]
     },
     {
       "page_number": 7,
-      "rows_found": 3,
-      "rows": [
-        {
-          "Project Location": "Bhadla-IV PS",
-          "State": null,
-          "substaion": null,
-          "Name of the developers": "Renew Solar Power Private Limited",
-          "GNA/ST II Application ID": "2200000521",
-          "LTA Application ID": null,
-          "Application Quantum (MW)(ST II)": "200"
-        },
-        {
-          "Project Location": "Bhadla-IV PS",
-          "State": null,
-          "substaion": null,
-          "Name of the developers": "Renew Solar Power Private Limited",
-          "GNA/ST II Application ID": "2200000522",
-          "LTA Application ID": null,
-          "Application Quantum (MW)(ST II)": "300"
-        },
-        {
-          "Project Location": "Bhadla-IV PS",
-          "State": null,
-          "substaion": null,
-          "Name of the developers": "Renew Solar Power Private Limited",
-          "GNA/ST II Application ID": null,
-          "LTA Application ID": null,
-          "Application Quantum (MW)(ST II)": "300"
-        }
-      ]
+      "rows_found": 0,
+      "rows": []
     },
     {
       "page_number": 8,
@@ -82,36 +66,88 @@
           "Name of the developers": "NTPC Renewable Energy Limited",
           "GNA/ST II Application ID": "2200000564",
           "LTA Application ID": null,
-          "Application Quantum (MW)(ST II)": "200"
+          "Application Quantum (MW)(ST II)": "200",
+          "Nature of Applicant": "Generator (Solar)",
+          "Mode(Criteria for applying)": "SECI LOA",
+          "Applied Start of Connectivity sought by developer date": "16.04.2026",
+          "Application/Submission Date": "15.02.2024"
         }
       ]
     },
     {
       "page_number": 9,
-      "rows_found": 0,
-      "rows": []
+      "rows_found": 1,
+      "rows": [
+        {
+          "Project Location": null,
+          "State": null,
+          "substaion": null,
+          "Name of the developers": "Ambuja Cements Limited",
+          "GNA/ST II Application ID": "00000740",
+          "LTA Application ID": null,
+          "Application Quantum (MW)(ST II)": "25",
+          "Nature of Applicant": "Drawee entity connected to Intra State Transmission System",
+          "Mode(Criteria for applying)": null,
+          "Applied Start of Connectivity sought by developer date": "01.09.2024",
+          "Application/Submission Date": "03.05.2024"
+        }
+      ]
     },
     {
       "page_number": 10,
-      "rows_found": 2,
+      "rows_found": 4,
       "rows": [
         {
-          "Project Location": "Chamakri, Himachal Pradesh",
-          "State": "himachal pradesh",
-          "substaion": "Chamakri",
+          "Project Location": null,
+          "State": null,
+          "substaion": null,
           "Name of the developers": "Ambuja Cements Limited",
-          "GNA/ST II Application ID": "22100000768",
+          "GNA/ST II Application ID": "0000739",
           "LTA Application ID": null,
-          "Application Quantum (MW)(ST II)": "15"
+          "Application Quantum (MW)(ST II)": "7",
+          "Nature of Applicant": "Drawee entity connected to Intra State Transmission System",
+          "Mode(Criteria for applying)": null,
+          "Applied Start of Connectivity sought by developer date": "01.09.2024",
+          "Application/Submission Date": "03.05.2024"
         },
         {
-          "Project Location": "Kangoo, Himachal Pradesh",
-          "State": "himachal pradesh",
-          "substaion": "Kangoo",
+          "Project Location": null,
+          "State": null,
+          "substaion": null,
           "Name of the developers": "Ambuja Cements Limited",
-          "GNA/ST II Application ID": "22100000768",
+          "GNA/ST II Application ID": "0000770",
           "LTA Application ID": null,
-          "Application Quantum (MW)(ST II)": "8.5"
+          "Application Quantum (MW)(ST II)": "15",
+          "Nature of Applicant": "Drawee entity connected to Intra State Transmission System",
+          "Mode(Criteria for applying)": null,
+          "Applied Start of Connectivity sought by developer date": "01.09.2024",
+          "Application/Submission Date": "07.05.2024"
+        },
+        {
+          "Project Location": "Chamakri Substation",
+          "State": null,
+          "substaion": "Chamakri Substation",
+          "Name of the developers": "Ambuja Cements Limited",
+          "GNA/ST II Application ID": "0000768",
+          "LTA Application ID": null,
+          "Application Quantum (MW)(ST II)": "15",
+          "Nature of Applicant": "Drawee entity connected to Intra State Transmission System",
+          "Mode(Criteria for applying)": null,
+          "Applied Start of Connectivity sought by developer date": "01.09.2024",
+          "Application/Submission Date": "07.05.2024"
+        },
+        {
+          "Project Location": "Kangoo Substation",
+          "State": null,
+          "substaion": "Kangoo Substation",
+          "Name of the developers": "Ambuja Cements Limited",
+          "GNA/ST II Application ID": "0000768",
+          "LTA Application ID": null,
+          "Application Quantum (MW)(ST II)": "8.5",
+          "Nature of Applicant": "Drawee entity connected to Intra State Transmission System",
+          "Mode(Criteria for applying)": null,
+          "Applied Start of Connectivity sought by developer date": "01.09.2024",
+          "Application/Submission Date": "07.05.2024"
         }
       ]
     }

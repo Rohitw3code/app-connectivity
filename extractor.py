@@ -63,6 +63,19 @@ TARGET_COLUMN_VARIANTS: dict[str, list[list[str]]] = {
         [r"\bInstalled\b", r"\bCapacity\b", r"\bMW\b"],
         [r"\bConnectivity\b", r"\bQuantum\b", r"\bMW\b"],
     ],
+    "Nature of Applicant": [
+        [r"\bNature\b", r"\bApplicant\b"],
+    ],
+    "Mode(Criteria for applying)": [
+        [r"\bCriterion\b", r"\bapplying\b"],
+    ],
+    "Applied Start of Connectivity sought by developer date": [
+        [r"\bStart\b", r"\bDate\b", r"\bConnectivity\b", r"\bApplication\b"],
+    ],
+    "Application/Submission Date": [
+        [r"\bApplication\b", r"\bNo\b", r"\bDate\b"],
+        [r"\bSubmission\b", r"\bDate\b"],
+    ],
 }
 
 
@@ -113,6 +126,12 @@ class MappedRow(BaseModel):
     gna_st_ii_application_id: Optional[str] = Field(None, alias="GNA/ST II Application ID")
     lta_application_id: Optional[str] = Field(None, alias="LTA Application ID")
     application_quantum_mw_st_ii: Optional[str] = Field(None, alias="Application Quantum (MW)(ST II)")
+    nature_of_applicant: Optional[str] = Field(None, alias="Nature of Applicant")
+    mode_criteria_for_applying: Optional[str] = Field(None, alias="Mode(Criteria for applying)")
+    applied_start_connectivity_date: Optional[str] = Field(
+        None, alias="Applied Start of Connectivity sought by developer date"
+    )
+    application_submission_date: Optional[str] = Field(None, alias="Application/Submission Date")
 
 class PageResult(BaseModel):
     page_number:  int
@@ -145,6 +164,10 @@ Extract table data and return ONLY these output keys:
 5) GNA/ST II Application ID
 6) LTA Application ID
 7) Application Quantum (MW)(ST II)
+8) Nature of Applicant
+9) Mode(Criteria for applying)
+10) Applied Start of Connectivity sought by developer date
+11) Application/Submission Date
 
 Column-name mapping rules:
 - Project Location <- Project Location
@@ -154,10 +177,15 @@ Column-name mapping rules:
 - GNA/ST II Application ID <- Application No. & Date OR Application ID
 - LTA Application ID <- App. No. & Conn. Quantum (MW) of already granted Connectivity
 - Application Quantum (MW)(ST II) <- Installed Capacity (MW) OR Connectivity Quantum (MW)
+- Nature of Applicant <- Nature of Applicant
+- Mode(Criteria for applying) <- Criterion for applying
+- Applied Start of Connectivity sought by developer date <- Start Date of Connectivity (As per Application)
+- Application/Submission Date <- Application No. & Date OR Submission Date (extract only date)
 
 Extraction rules:
 - Extract every visible data row in the chunk.
 - Use null if a value is not available.
+- It is not required that all columns exist in each row; extract what is present and keep others as null.
 - Keep values as strings exactly as seen (except LTA leading-zero cleanup is done later).
 - Ignore headers, footnotes, and explanatory paragraphs.
 - "Name of the developers" must be the applicant/developer company name, not criterion values like "SECI LOA" or "SJVN LOA".
@@ -172,7 +200,11 @@ Return JSON only in this exact shape:
             "Name of the developers": "THDC India Limited",
             "GNA/ST II Application ID": "1200003683",
             "LTA Application ID": "0412100008",
-            "Application Quantum (MW)(ST II)": "300"
+            "Application Quantum (MW)(ST II)": "300",
+            "Nature of Applicant": "Generator (Solar)",
+            "Mode(Criteria for applying)": "SECI LOA",
+            "Applied Start of Connectivity sought by developer date": "16.04.2026",
+            "Application/Submission Date": "15.02.2024"
         }}
     ]
 }}
@@ -274,6 +306,24 @@ def _normalize_numeric_id_list(value: Optional[str], strip_leading_zeros: bool =
     return ", ".join(cleaned)
 
 
+def _extract_date(value: Optional[str]) -> Optional[str]:
+    value = _clean_value(value)
+    if not value:
+        return None
+
+    patterns = [
+        r"\b\d{2}[./-]\d{2}[./-]\d{4}\b",
+        r"\b\d{4}[./-]\d{2}[./-]\d{2}\b",
+        r"\b\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4}\b",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, value)
+        if match:
+            return match.group(0)
+
+    return None
+
+
 def _normalize_developer_name(value: Optional[str]) -> Optional[str]:
     value = _clean_value(value)
     if not value:
@@ -303,6 +353,14 @@ def normalize_rows(rows: list[MappedRow]) -> list[MappedRow]:
         )
         payload["Application Quantum (MW)(ST II)"] = _clean_value(
             payload.get("Application Quantum (MW)(ST II)")
+        )
+        payload["Nature of Applicant"] = _clean_value(payload.get("Nature of Applicant"))
+        payload["Mode(Criteria for applying)"] = _clean_value(payload.get("Mode(Criteria for applying)"))
+        payload["Applied Start of Connectivity sought by developer date"] = _extract_date(
+            payload.get("Applied Start of Connectivity sought by developer date")
+        )
+        payload["Application/Submission Date"] = _extract_date(
+            payload.get("Application/Submission Date")
         )
         normalized.append(MappedRow.model_validate(payload))
     return normalized
