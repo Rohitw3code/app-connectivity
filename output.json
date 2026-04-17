@@ -1,0 +1,98 @@
+{
+  "pdf_path": "/home/bittu/Desktop/App-connectivity/start/source_1/test.pdf",
+  "total_pages_extracted": 10,
+  "pages_passed_gate": 3,
+  "pages_skipped": 7,
+  "total_rows": 6,
+  "results": [
+    {
+      "page_number": 6,
+      "rows_found": 3,
+      "rows": [
+        {
+          "Sl.No.": "1",
+          "Application ID": "2200000516",
+          "Applicant": "Renew Solar Power Private Limited",
+          "Project Location": "Jodhpur dist., Rajasthan",
+          "Submission Date": "25.01.2024",
+          "Nature of Applicant": "Generator (Solar)",
+          "Criterion for applying": "SECI LOA",
+          "Connectivity Quantum (MW)": "300",
+          "Start Date for Connectivity (As per Application)": "30.09.2026",
+          "Connectivity location (As per Application)": "Bhadla-III PS"
+        },
+        {
+          "Sl.No.": "2",
+          "Application ID": "2200000521",
+          "Applicant": "Renew Solar Power Private Limited",
+          "Project Location": "Jodhpur dist., Rajasthan",
+          "Submission Date": "25.01.2024",
+          "Nature of Applicant": "Generator (Solar)",
+          "Criterion for applying": "SJVN LOA",
+          "Connectivity Quantum (MW)": "200",
+          "Start Date for Connectivity (As per Application)": "31.05.2026",
+          "Connectivity location (As per Application)": "Bhadla-III PS"
+        },
+        {
+          "Sl.No.": "3",
+          "Application ID": "2200000522",
+          "Applicant": "Renew Solar Power Private Limited",
+          "Project Location": "Jodhpur dist., Rajasthan",
+          "Submission Date": "25.01.2024",
+          "Nature of Applicant": "Generator (Solar)",
+          "Criterion for applying": "SJVN LOA",
+          "Connectivity Quantum (MW)": "300",
+          "Start Date for Connectivity (As per Application)": "31.05.2026",
+          "Connectivity location (As per Application)": "Bhadla-III PS"
+        }
+      ]
+    },
+    {
+      "page_number": 7,
+      "rows_found": 0,
+      "rows": []
+    },
+    {
+      "page_number": 8,
+      "rows_found": 3,
+      "rows": [
+        {
+          "Sl.No.": "1",
+          "Application ID": "2200000564",
+          "Applicant": "NTPC Renewable Energy Limited",
+          "Project Location": "Jaisalmer distt., Rajasthan",
+          "Submission Date": "15.02.2024",
+          "Nature of Applicant": "Generator (Solar)",
+          "Criterion for applying": "SECI LOA",
+          "Connectivity Quantum (MW)": "200",
+          "Start Date for Connectivity (As per Application)": "16.04.2026",
+          "Connectivity location (As per Application)": "Fatehgarh-IV PS"
+        },
+        {
+          "Sl.No.": "1",
+          "Application ID": "2200000740",
+          "Applicant": "Ambuja Cements Limited",
+          "Project Location": null,
+          "Submission Date": "03.05.2024",
+          "Nature of Applicant": "Drawee entity connected to State Transmission System",
+          "Criterion for applying": null,
+          "Connectivity Quantum (MW)": "25",
+          "Start Date for Connectivity (As per Application)": "01.06.2024",
+          "Connectivity location (As per Application)": null
+        },
+        {
+          "Sl.No.": "2",
+          "Application ID": "2200000739",
+          "Applicant": "Ambuja Cements Limited",
+          "Project Location": null,
+          "Submission Date": "03.05.2024",
+          "Nature of Applicant": "Drawee entity connected to State Transmission System",
+          "Criterion for applying": null,
+          "Connectivity Quantum (MW)": "7",
+          "Start Date for Connectivity (As per Application)": "01.06.2024",
+          "Connectivity location (As per Application)": null
+        }
+      ]
+    }
+  ]
+}
