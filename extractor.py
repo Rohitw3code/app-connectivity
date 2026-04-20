@@ -48,6 +48,12 @@ TARGET_COLUMN_VARIANTS: dict[str, list[list[str]]] = {
     "LTA Application ID": [
         [r"\bApp\b", r"\bNo\b", r"\bConn\b", r"\bQuantum\b", r"\bConnectivity\b"],
     ],
+    "Application ID under Enhancement 5.2 or revision": [
+        [r"\bApplication\b", r"\bID\b", r"\b5\.?2\b"],
+        [r"\bApplication\b", r"\bNo\b", r"\bDate\b", r"\b5\.?2\b"],
+        [r"\benhancement\b", r"\b5\.?2\b"],
+        [r"\brevision\b", r"\bapplication\b", r"\bID\b"],
+    ],
     "Application Quantum (MW)(ST II)": [
         [r"\bInstalled\b", r"\bCapacity\b", r"\bMW\b"],
         [r"\bConnectivity\b", r"\bQuantum\b", r"\bMW\b"],
@@ -114,6 +120,9 @@ class MappedRow(BaseModel):
     name_of_the_developers: Optional[str] = Field(None, alias="Name of the developers")
     gna_st_ii_application_id: Optional[str] = Field(None, alias="GNA/ST II Application ID")
     lta_application_id: Optional[str] = Field(None, alias="LTA Application ID")
+    application_id_under_enhancement_5_2_or_revision: Optional[str] = Field(
+        None, alias="Application ID under Enhancement 5.2 or revision"
+    )
     application_quantum_mw_st_ii: Optional[str] = Field(None, alias="Application Quantum (MW)(ST II)")
     nature_of_applicant: Optional[str] = Field(None, alias="Nature of Applicant")
     mode_criteria_for_applying: Optional[str] = Field(None, alias="Mode(Criteria for applying)")
@@ -283,6 +292,77 @@ def _normalize_numeric_id_list(value: Optional[str], strip_leading_zeros: bool =
     return ", ".join(cleaned)
 
 
+def _extract_numeric_ids(value: Optional[str]) -> list[str]:
+    value = _clean_value(value)
+    if not value:
+        return []
+    return re.findall(r"\b\d{6,}\b", value)
+
+
+def _is_lta_id(value: str) -> bool:
+    return str(value).startswith("04")
+
+
+def _has_stage_ii_context(*values: Optional[str]) -> bool:
+    text = " ".join(str(v or "") for v in values).lower()
+    return bool(re.search(r"\b(stage\s*ii|st\s*ii|gna/st\s*ii|gna\s*st\s*ii)\b", text, flags=re.IGNORECASE))
+
+
+def _has_enhancement_context(*values: Optional[str]) -> bool:
+    text = " ".join(str(v or "") for v in values).lower()
+    return bool(re.search(r"\b(5\.?2|regulation\s*5\.?2|enhancement|revision)\b", text, flags=re.IGNORECASE))
+
+
+def _pick_gna_preferred_id(candidates: list[str], prefer_stage_ii: bool) -> Optional[str]:
+    if not candidates:
+        return None
+
+    if prefer_stage_ii:
+        for candidate in candidates:
+            if not _is_lta_id(candidate):
+                return candidate
+        return None
+
+    non_lta = [candidate for candidate in candidates if not _is_lta_id(candidate)]
+    if non_lta:
+        return non_lta[0]
+    return candidates[0]
+
+
+def _derive_enhancement_application_id(
+    enhancement_value: Optional[str],
+    gna_value: Optional[str],
+    lta_value: Optional[str],
+    mode_value: Optional[str],
+) -> Optional[str]:
+    if not _has_enhancement_context(enhancement_value, gna_value, lta_value, mode_value):
+        return None
+
+    stage_ii_context = _has_stage_ii_context(enhancement_value, gna_value, lta_value, mode_value)
+
+    enhancement_ids = _extract_numeric_ids(enhancement_value)
+    gna_ids = _extract_numeric_ids(gna_value)
+    lta_ids = _extract_numeric_ids(lta_value)
+
+    # Prefer explicit enhancement/application-id column values for regulation 5.2 rows.
+    candidate = _pick_gna_preferred_id(enhancement_ids, prefer_stage_ii=stage_ii_context)
+    if candidate:
+        return candidate
+
+    # Fallback to GNA/ST-II column.
+    candidate = _pick_gna_preferred_id(gna_ids, prefer_stage_ii=stage_ii_context)
+    if candidate:
+        return candidate
+
+    # Last fallback from App. No. & Conn. Quantum (already granted):
+    # if single ID starts with 04 treat as LTA (skip); else treat as GNA.
+    if len(lta_ids) == 1:
+        only = lta_ids[0]
+        return None if _is_lta_id(only) else only
+
+    return _pick_gna_preferred_id(lta_ids, prefer_stage_ii=stage_ii_context)
+
+
 def _extract_date(value: Optional[str]) -> Optional[str]:
     value = _clean_value(value)
     if not value:
@@ -318,15 +398,26 @@ def normalize_rows(rows: list[MappedRow]) -> list[MappedRow]:
     normalized = []
     for row in rows:
         payload = row.model_dump(by_alias=True)
+        raw_gna = payload.get("GNA/ST II Application ID")
+        raw_lta = payload.get("LTA Application ID")
+        raw_mode = payload.get("Mode(Criteria for applying)")
+        raw_enhancement = payload.get("Application ID under Enhancement 5.2 or revision")
+
         payload["Project Location"] = _clean_value(payload.get("Project Location"))
         payload["State"] = _extract_state(payload.get("Project Location"))
         payload["substaion"] = _clean_value(payload.get("substaion"))
         payload["Name of the developers"] = _normalize_developer_name(payload.get("Name of the developers"))
         payload["GNA/ST II Application ID"] = _normalize_numeric_id_list(
-            payload.get("GNA/ST II Application ID"), strip_leading_zeros=False
+            raw_gna, strip_leading_zeros=False
         )
         payload["LTA Application ID"] = _normalize_numeric_id_list(
-            payload.get("LTA Application ID"), strip_leading_zeros=True
+            raw_lta, strip_leading_zeros=True
+        )
+        payload["Application ID under Enhancement 5.2 or revision"] = _derive_enhancement_application_id(
+            enhancement_value=raw_enhancement,
+            gna_value=raw_gna,
+            lta_value=raw_lta,
+            mode_value=raw_mode,
         )
         payload["Application Quantum (MW)(ST II)"] = _clean_value(
             payload.get("Application Quantum (MW)(ST II)")

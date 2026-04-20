@@ -14,11 +14,12 @@ Extract table data and return ONLY these output keys:
 4) Name of the developers
 5) GNA/ST II Application ID
 6) LTA Application ID
-7) Application Quantum (MW)(ST II)
-8) Nature of Applicant
-9) Mode(Criteria for applying)
-10) Applied Start of Connectivity sought by developer date
-11) Application/Submission Date
+7) Application ID under Enhancement 5.2 or revision
+8) Application Quantum (MW)(ST II)
+9) Nature of Applicant
+10) Mode(Criteria for applying)
+11) Applied Start of Connectivity sought by developer date
+12) Application/Submission Date
 
 Column-name mapping rules:
 - Project Location <- Project Location
@@ -27,11 +28,20 @@ Column-name mapping rules:
 - Name of the developers <- Applicant OR Name of Applicant
 - GNA/ST II Application ID <- Application No. & Date OR Application ID
 - LTA Application ID <- App. No. & Conn. Quantum (MW) of already granted Connectivity
+- Application ID under Enhancement 5.2 or revision <- use only when chunk/table context mentions Enhancement 5.2 / regulation 5.2 / revision; source from Application No. & Date OR Application ID OR App. No. & Conn. Quantum (MW) of already granted Connectivity using the rules below
 - Application Quantum (MW)(ST II) <- Installed Capacity (MW) OR Connectivity Quantum (MW)
 - Nature of Applicant <- Nature of Applicant
 - Mode(Criteria for applying) <- Criterion for applying
 - Applied Start of Connectivity sought by developer date <- Start Date of Connectivity (As per Application)
 - Application/Submission Date <- Application No. & Date OR Submission Date (extract only date)
+
+Rules for "Application ID under Enhancement 5.2 or revision":
+- Populate this field only when the row/chunk indicates enhancement/revision context (e.g., "5.2", "regulation 5.2", "enhancement", "revision"). Otherwise set null.
+- If stage-II/ST-II is mentioned for the ID list, choose the GNA/ST-II application ID for this field (not LTA).
+- In "App. No. & Conn. Quantum (MW) of already granted Connectivity":
+    - if stage-II/ST-II is mentioned, treat that ID as GNA/ST-II and the other ID as LTA.
+    - if only one ID is present: if it starts with "04" treat it as LTA; otherwise treat it as GNA/ST-II.
+- For regulation 5.2 rows, when both are present, prefer the value from Application ID/Application No. & Date for this enhancement column.
 
 Extraction rules:
 - Extract every visible data row in the chunk.
@@ -51,6 +61,7 @@ Return JSON only in this exact shape:
             "Name of the developers": "THDC India Limited",
             "GNA/ST II Application ID": "1200003683",
             "LTA Application ID": "0412100008",
+            "Application ID under Enhancement 5.2 or revision": "1200003683",
             "Application Quantum (MW)(ST II)": "300",
             "Nature of Applicant": "Generator (Solar)",
             "Mode(Criteria for applying)": "SECI LOA",
