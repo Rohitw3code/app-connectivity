@@ -1,22 +1,39 @@
 {
   "pdf": "/home/bittu/Desktop/App-connectivity/start/source_1/test.pdf",
   "page_number": 7,
-  "chunks_count": 3,
+  "chunks_count": 4,
   "chunks": [
     {
       "chunk_index": 1,
-      "char_length": 1680,
-      "text": "Minutes of 33rd Consultation Meeting for Evolving Transmission Schemes in Northern Region held on 05.08.2024\nCriterion Connectivity Start Date of Connectivity Conn BGs requirement\nSl. Application Project Submission Nature of\nApplicant for Quantum Connectivity (As Location (As per\nNo. ID Location Date Applicant\napplying (MW) per Application) Application)\nIt was informed that the above applications for connectivity by M/s Renew Solar Power Private Limited for 800 MW (300+200+300) were discussed in the 31st\nCMETS NR held on 27.06.2024 wherein M/s Renew informed that they are withdrawing two no. of applications at S. no. 2 & 3(2200000521(200 MW) &\n2200000522(300 MW)). In view of the withdrawal of two applications, for the application of 300 MW at S. No. 1, it was proposed to grant connectivity at 220 kV\nthrough S/c line. M/s Renew agreed for the same.\nSubsequent to mail dated 28.06.2024 confirming withdrawal by M/s Renew, M/s Renew vide mail dated 30.06.2024 again informed that they are not withdrawing\nthe applications (2200000521(200 MW) & 2200000522(300 MW)) as informed in the meeting and they agree for the grant of connectivity as originally proposed by\nCTUIL at 400 kV Bhadla-IV PS.\nM/s Renew may note that such frequent change in decisions will not be entertained in future and authorized representative should bring their management firm\ndecision before any communication in the meeting/mail. M/s Renew vide mail dated 12.07.2024 as well as in the meeting assured that this would not be repeated\nin future. Accordingly, it was decided that the above applications shall be again taken up for stakeholders discussion in the subsequent CMETS NR meeting for\ngrant."
+      "start": 0,
+      "end": 1032,
+      "char_length": 1032,
+      "text": "Minutes of 33rd Consultation Meeting for Evolving Transmission Schemes in Northern Region held on 05.08.2024\nCriterion Connectivity Start Date of Connectivity Conn BGs requirement\nSl. Application Project Submission Nature of\nApplicant for Quantum Connectivity (As Location (As per\nNo. ID Location Date Applicant\napplying (MW) per Application) Application)\nIt was informed that the above applications for connectivity by M/s Renew Solar Power Private Limited for 800 MW (300+200+300) were discussed in the 31st\nCMETS NR held on 27.06.2024 wherein M/s Renew informed that they are withdrawing two no. of applications at S. no. 2 & 3(2200000521(200 MW) &\n2200000522(300 MW)). In view of the withdrawal of two applications, for the application of 300 MW at S. No. 1, it was proposed to grant connectivity at 220 kV\nthrough S/c line. M/s Renew agreed for the same.\nSubsequent to mail dated 28.06.2024 confirming withdrawal by M/s Renew, M/s Renew vide mail dated 30.06.2024 again informed that they are not withdrawing\nthe applications (",
+      "overlap_with_previous": 0
     },
     {
       "chunk_index": 2,
-      "char_length": 1760,
-      "text": "in future. Accordingly, it was decided that the above applications shall be again taken up for stakeholders discussion in the subsequent CMETS NR meeting for\ngrant.\nConsidering the request by M/s Renew to process the above 3 no. of applications, it was proposed to grant connectivity to M/s Renew at 400 kV Bhadla-IV PS\nthrough 1 no. of bay for the combined connectivity of 800 MW (300+200+300). M/s Renew vide letter dated 30.06.2024 had already confirmed the tower\nconfiguration as S/c on D/c & 400 kV bay shall be under ISTS. The same is noted.\nIt was mentioned that the transmission system for evacuation of power from Bhadla-IV is presently under evolution. Upon evolution, the scheme shall be discussed\nin a separate joint study meeting among CEA, CTUIL, Grid India & Stakeholders followed by the subsequent CMETS meeting. The detailed transmission system\nshall be informed upon finalization and approval of the scheme.\nIt was also informed that M/s Renew Solar Power Private Limited has requested Start Date of Connectivity under GNA from 30.09.2026(300 MW) &\n31.05.2026(200+300 MW). However, considering the same and expected date of commissioning of transmission system (i.e 31.03.2030), the start date of\nConnectivity under GNA shall be 31.03.2030(interim). M/s Renew Noted the same.\nAccordingly, it was agreed to grant 800 MW connectivity to M/s Renew Solar Power Pvt. Ltd. at 400 kV Bhadla-IV PS. Details of the transmission system for\nconnectivity are as under:\nDetails of Transmission system for Connectivity under GNA:\nA. Associated Transmission System (ATS): NIL\nB. Transmission System under applicant scope\n(i). Common Pooling station for Renew Solar Power Private Limited Solar Power Projects (App. No. 2200000516(300 MW), 2200000521(200MW) &"
+      "start": 672,
+      "end": 1884,
+      "char_length": 1211,
+      "text": "In view of the withdrawal of two applications, for the application of 300 MW at S. No. 1, it was proposed to grant connectivity at 220 kV\nthrough S/c line. M/s Renew agreed for the same.\nSubsequent to mail dated 28.06.2024 confirming withdrawal by M/s Renew, M/s Renew vide mail dated 30.06.2024 again informed that they are not withdrawing\nthe applications (2200000521(200 MW) & 2200000522(300 MW)) as informed in the meeting and they agree for the grant of connectivity as originally proposed by\nCTUIL at 400 kV Bhadla-IV PS.\nM/s Renew may note that such frequent change in decisions will not be entertained in future and authorized representative should bring their management firm\ndecision before any communication in the meeting/mail. M/s Renew vide mail dated 12.07.2024 as well as in the meeting assured that this would not be repeated\nin future. Accordingly, it was decided that the above applications shall be again taken up for stakeholders discussion in the subsequent CMETS NR meeting for\ngrant.\nConsidering the request by M/s Renew to process the above 3 no. of applications, it was proposed to grant connectivity to M/s Renew at 400 kV Bhadla-IV PS\nthrough 1 no. of bay for the combined connectivi",
+      "overlap_with_previous": 360
     },
     {
       "chunk_index": 3,
-      "char_length": 414,
-      "text": "Details of Transmission system for Connectivity under GNA:\nA. Associated Transmission System (ATS): NIL\nB. Transmission System under applicant scope\n(i). Common Pooling station for Renew Solar Power Private Limited Solar Power Projects (App. No. 2200000516(300 MW), 2200000521(200MW) &\n2200000522(300MW) – Bhadla-IV PS 400 kV S/c line on D/c tower (suitable to carry minimum 900 MW at nominal voltage)\nPage 2 of 98"
+      "start": 1524,
+      "end": 2736,
+      "char_length": 1212,
+      "text": "e. Accordingly, it was decided that the above applications shall be again taken up for stakeholders discussion in the subsequent CMETS NR meeting for\ngrant.\nConsidering the request by M/s Renew to process the above 3 no. of applications, it was proposed to grant connectivity to M/s Renew at 400 kV Bhadla-IV PS\nthrough 1 no. of bay for the combined connectivity of 800 MW (300+200+300). M/s Renew vide letter dated 30.06.2024 had already confirmed the tower\nconfiguration as S/c on D/c & 400 kV bay shall be under ISTS. The same is noted.\nIt was mentioned that the transmission system for evacuation of power from Bhadla-IV is presently under evolution. Upon evolution, the scheme shall be discussed\nin a separate joint study meeting among CEA, CTUIL, Grid India & Stakeholders followed by the subsequent CMETS meeting. The detailed transmission system\nshall be informed upon finalization and approval of the scheme.\nIt was also informed that M/s Renew Solar Power Private Limited has requested Start Date of Connectivity under GNA from 30.09.2026(300 MW) &\n31.05.2026(200+300 MW). However, considering the same and expected date of commissioning of transmission system (i.e 31.03.2030), the start date of\nConne",
+      "overlap_with_previous": 360
+    },
+    {
+      "chunk_index": 4,
+      "start": 2376,
+      "end": 3405,
+      "char_length": 1029,
+      "text": "m\nshall be informed upon finalization and approval of the scheme.\nIt was also informed that M/s Renew Solar Power Private Limited has requested Start Date of Connectivity under GNA from 30.09.2026(300 MW) &\n31.05.2026(200+300 MW). However, considering the same and expected date of commissioning of transmission system (i.e 31.03.2030), the start date of\nConnectivity under GNA shall be 31.03.2030(interim). M/s Renew Noted the same.\nAccordingly, it was agreed to grant 800 MW connectivity to M/s Renew Solar Power Pvt. Ltd. at 400 kV Bhadla-IV PS. Details of the transmission system for\nconnectivity are as under:\nDetails of Transmission system for Connectivity under GNA:\nA. Associated Transmission System (ATS): NIL\nB. Transmission System under applicant scope\n(i). Common Pooling station for Renew Solar Power Private Limited Solar Power Projects (App. No. 2200000516(300 MW), 2200000521(200MW) &\n2200000522(300MW) – Bhadla-IV PS 400 kV S/c line on D/c tower (suitable to carry minimum 900 MW at nominal voltage)\nPage 2 of 98",
+      "overlap_with_previous": 360
     }
   ]
 }

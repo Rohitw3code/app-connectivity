@@ -1,17 +1,39 @@
 {
   "pdf": "/home/bittu/Desktop/App-connectivity/start/source_1/test.pdf",
   "page_number": 4,
-  "chunks_count": 2,
+  "chunks_count": 4,
   "chunks": [
     {
       "chunk_index": 1,
-      "char_length": 1787,
-      "text": "Shri Pavan Kumar Gupta Shri Santosh Narayan\nAuthorized Signatory Group Head Project Development\nJuniper Green Energy Private Limited Tata Power Renewable Energy Limited\nPlot No. 18, 1st Floor, Institutional Area, Sector C/o The Tata Power Company Limited,\n- 32, Gurgaon- 122001, Haryana Corporate Center B, 34 Sant Tukaram Road,\nPh.: 9560540654, 9999246027, 9910509744 Carnac Bunder, Mumbai-400009, Maharashtra\nEmail: Ph.: 9223550695, 8005920193\npavan.gupta@junipergreenenergy.com; Email: narayans@tatapower.com;\nbd@junipergreenenergy.com; hari.sharma@tatapower.com;\nSmt. Poorva Pitke Shri Pritpal Singh\nSenior Manager DGM Business Development\nSprng Urja Private Limited Jsw Neo Energy Limited\nSprng Vaayu Urja Private Limited JSW Centre Bandra Kurla Complex Bandra East\nUpper Ground, Office A-001, Pentagon 5, Mumbai-400051, Maharashtra\nMagarpatta City, Hadapsar Pune-411013, Ph.: 9867381807, 9821207443\nMaharashtra Email: pritpal.singh@jsw.in;\nPh.: 9545659577, 8149855176 abhay.yagnik@jsw.in;\nEmail: poorvapitke@sprngenergy.com;\nabhinavbhansali@sprngenergy.com;\nShri Vikram Malkotia Shri Pushvinder Singh Kohli\nDirector Director\nAmaresha Renawables India Project Pvt Ltd Izhma Solar Private Limited\nVayuna Renewables India Project Pvt Ltd Prespa Solar Private Limited\nKantida Renewables India Project Pvt Ltd 5th Floor, North Tower, M3M Tee Point, Sector-\nVismaya Four Renewables Private Limited 65, Golf Course Extension Road Gurgaon-\nVismaya Five Renewables Private Limited 122018, Haryana\nB-208 & 209 Pioneer Urban,Square, 2nd Floor, Ph.: 9811519257, 8826344338\nSector 62, Air Force, Gurgaon, Haryana Email: pushvinder.singh@ibvogt.com;\nPh.: 8800917799, 9717855521 izhmasolar@ibvogt.com;\nEmail: vikram.malkotia@upcrenewables.com; prespasolar@ibvogt.com\nalok.nigam@upcrenewables.com;"
+      "start": 0,
+      "end": 843,
+      "char_length": 843,
+      "text": "Shri Pavan Kumar Gupta Shri Santosh Narayan\nAuthorized Signatory Group Head Project Development\nJuniper Green Energy Private Limited Tata Power Renewable Energy Limited\nPlot No. 18, 1st Floor, Institutional Area, Sector C/o The Tata Power Company Limited,\n- 32, Gurgaon- 122001, Haryana Corporate Center B, 34 Sant Tukaram Road,\nPh.: 9560540654, 9999246027, 9910509744 Carnac Bunder, Mumbai-400009, Maharashtra\nEmail: Ph.: 9223550695, 8005920193\npavan.gupta@junipergreenenergy.com; Email: narayans@tatapower.com;\nbd@junipergreenenergy.com; hari.sharma@tatapower.com;\nSmt. Poorva Pitke Shri Pritpal Singh\nSenior Manager DGM Business Development\nSprng Urja Private Limited Jsw Neo Energy Limited\nSprng Vaayu Urja Private Limited JSW Centre Bandra Kurla Complex Bandra East\nUpper Ground, Office A-001, Pentagon 5, Mumbai-400051, Maharashtra\nMagar",
+      "overlap_with_previous": 0
     },
     {
       "chunk_index": 2,
-      "char_length": 1156,
-      "text": "B-208 & 209 Pioneer Urban,Square, 2nd Floor, Ph.: 9811519257, 8826344338\nSector 62, Air Force, Gurgaon, Haryana Email: pushvinder.singh@ibvogt.com;\nPh.: 8800917799, 9717855521 izhmasolar@ibvogt.com;\nEmail: vikram.malkotia@upcrenewables.com; prespasolar@ibvogt.com\nalok.nigam@upcrenewables.com;\nShri Aniket Vyas Shri Sankalp Kant\nDirector Director\nSA Renewable Infra Private Limited Vena Energy Vindhya Wind Power Private\nC/O. Krishna Acharya, Dharnidhar Mandir Ke Limited\nPass, Bikaner City, Bikaner- 334001, No. 3. 5th Floor, Embassy Icon, Infantry\nRajasthan Road, Bengaluru- 560001, Karnataka\nPh.: 9413333984, 9571724543 Ph.: 9167664222, 9811016907\nEmail: aniket.vyas@icloud.com ; Email: sankalp.kant@venaenergy.com;\ninfrarenewable@gmail.com ; karan.jain@venaenergy.com;\nShri Yogesh Kumar Sanklecha Shri Pankaj Sharma\nAVP Authorised Signatory\nACME Solar Holdings Private Limited SAEL Industries Limited\nPlot No. 152, Sector-44, Gurugram, Haryana 3rd Floor, Worldmark -1, Aerocity, New Delhi –\n122002 110037\nPh.: 8744060601, 9911299514 Ph.: 9896643833, 9910624482\nEmail: yogesh@acme.in; Email: pankaj.sharma@sael.co;\napradhan@acme.in; ajay.tiwari@sael.co;"
+      "start": 483,
+      "end": 1506,
+      "char_length": 1022,
+      "text": "mail: narayans@tatapower.com;\nbd@junipergreenenergy.com; hari.sharma@tatapower.com;\nSmt. Poorva Pitke Shri Pritpal Singh\nSenior Manager DGM Business Development\nSprng Urja Private Limited Jsw Neo Energy Limited\nSprng Vaayu Urja Private Limited JSW Centre Bandra Kurla Complex Bandra East\nUpper Ground, Office A-001, Pentagon 5, Mumbai-400051, Maharashtra\nMagarpatta City, Hadapsar Pune-411013, Ph.: 9867381807, 9821207443\nMaharashtra Email: pritpal.singh@jsw.in;\nPh.: 9545659577, 8149855176 abhay.yagnik@jsw.in;\nEmail: poorvapitke@sprngenergy.com;\nabhinavbhansali@sprngenergy.com;\nShri Vikram Malkotia Shri Pushvinder Singh Kohli\nDirector Director\nAmaresha Renawables India Project Pvt Ltd Izhma Solar Private Limited\nVayuna Renewables India Project Pvt Ltd Prespa Solar Private Limited\nKantida Renewables India Project Pvt Ltd 5th Floor, North Tower, M3M Tee Point, Sector-\nVismaya Four Renewables Private Limited 65, Golf Course Extension Road Gurgaon-\nVismaya Five Renewables Private Limited 122018, Haryana\nB-208 & 209",
+      "overlap_with_previous": 360
+    },
+    {
+      "chunk_index": 3,
+      "start": 1146,
+      "end": 2169,
+      "char_length": 1023,
+      "text": "bles India Project Pvt Ltd Izhma Solar Private Limited\nVayuna Renewables India Project Pvt Ltd Prespa Solar Private Limited\nKantida Renewables India Project Pvt Ltd 5th Floor, North Tower, M3M Tee Point, Sector-\nVismaya Four Renewables Private Limited 65, Golf Course Extension Road Gurgaon-\nVismaya Five Renewables Private Limited 122018, Haryana\nB-208 & 209 Pioneer Urban,Square, 2nd Floor, Ph.: 9811519257, 8826344338\nSector 62, Air Force, Gurgaon, Haryana Email: pushvinder.singh@ibvogt.com;\nPh.: 8800917799, 9717855521 izhmasolar@ibvogt.com;\nEmail: vikram.malkotia@upcrenewables.com; prespasolar@ibvogt.com\nalok.nigam@upcrenewables.com;\nShri Aniket Vyas Shri Sankalp Kant\nDirector Director\nSA Renewable Infra Private Limited Vena Energy Vindhya Wind Power Private\nC/O. Krishna Acharya, Dharnidhar Mandir Ke Limited\nPass, Bikaner City, Bikaner- 334001, No. 3. 5th Floor, Embassy Icon, Infantry\nRajasthan Road, Bengaluru- 560001, Karnataka\nPh.: 9413333984, 9571724543 Ph.: 9167664222, 9811016907\nEmail: aniket.vyas@iclou",
+      "overlap_with_previous": 360
+    },
+    {
+      "chunk_index": 4,
+      "start": 1809,
+      "end": 2650,
+      "char_length": 840,
+      "text": "Sankalp Kant\nDirector Director\nSA Renewable Infra Private Limited Vena Energy Vindhya Wind Power Private\nC/O. Krishna Acharya, Dharnidhar Mandir Ke Limited\nPass, Bikaner City, Bikaner- 334001, No. 3. 5th Floor, Embassy Icon, Infantry\nRajasthan Road, Bengaluru- 560001, Karnataka\nPh.: 9413333984, 9571724543 Ph.: 9167664222, 9811016907\nEmail: aniket.vyas@icloud.com ; Email: sankalp.kant@venaenergy.com;\ninfrarenewable@gmail.com ; karan.jain@venaenergy.com;\nShri Yogesh Kumar Sanklecha Shri Pankaj Sharma\nAVP Authorised Signatory\nACME Solar Holdings Private Limited SAEL Industries Limited\nPlot No. 152, Sector-44, Gurugram, Haryana 3rd Floor, Worldmark -1, Aerocity, New Delhi –\n122002 110037\nPh.: 8744060601, 9911299514 Ph.: 9896643833, 9910624482\nEmail: yogesh@acme.in; Email: pankaj.sharma@sael.co;\napradhan@acme.in; ajay.tiwari@sael.co;",
+      "overlap_with_previous": 360
     }
   ]
 }

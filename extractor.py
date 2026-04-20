@@ -233,6 +233,64 @@ def build_splitter() -> RecursiveCharacterTextSplitter:
     )
 
 
+def split_page_into_fixed_chunks(
+    text: str,
+    num_chunks: int = 4,
+    overlap_chars: int = 180,
+) -> list[dict]:
+    """Split a page into exactly num_chunks chunks with explicit overlap metadata."""
+    src = text or ""
+    if num_chunks <= 0:
+        return [{"chunk_index": 1, "start": 0, "end": len(src), "char_length": len(src), "text": src}]
+
+    if not src:
+        return [
+            {
+                "chunk_index": i + 1,
+                "start": 0,
+                "end": 0,
+                "char_length": 0,
+                "text": "",
+                "overlap_with_previous": 0,
+            }
+            for i in range(num_chunks)
+        ]
+
+    n = len(src)
+    chunk_size = max(1, (n + num_chunks - 1) // num_chunks)
+    chunks: list[dict] = []
+
+    for i in range(num_chunks):
+        nominal_start = i * chunk_size
+        nominal_end = n if i == num_chunks - 1 else min(n, (i + 1) * chunk_size)
+
+        start = max(0, nominal_start - (overlap_chars if i > 0 else 0))
+        end = min(n, nominal_end + (overlap_chars if i < num_chunks - 1 else 0))
+
+        if chunks and start >= chunks[-1]["end"]:
+            # Ensure adjacent chunks overlap by at least one char.
+            start = max(0, chunks[-1]["end"] - 1)
+
+        chunk_text = src[start:end].strip()
+        chunks.append(
+            {
+                "chunk_index": i + 1,
+                "start": start,
+                "end": end,
+                "char_length": len(chunk_text),
+                "text": chunk_text,
+            }
+        )
+
+    for i, chunk in enumerate(chunks):
+        if i == 0:
+            chunk["overlap_with_previous"] = 0
+        else:
+            prev = chunks[i - 1]
+            chunk["overlap_with_previous"] = max(0, prev["end"] - chunk["start"])
+
+    return chunks
+
 def build_fallback_splitter() -> RecursiveCharacterTextSplitter:
     return RecursiveCharacterTextSplitter(
         chunk_size=900,
@@ -276,7 +334,7 @@ def extract_rows_with_fallback(
     return fallback_rows
 
 
-def save_page_chunks(chunks_dir: Path, pdf_path: str, page_number: int, chunks: list[str]) -> None:
+def save_page_chunks(chunks_dir: Path, pdf_path: str, page_number: int, chunks: list[dict]) -> None:
     chunks_dir.mkdir(parents=True, exist_ok=True)
     pdf_stem = Path(pdf_path).stem
     chunk_file = chunks_dir / f"{pdf_stem}_page_{page_number}.json"
@@ -284,14 +342,7 @@ def save_page_chunks(chunks_dir: Path, pdf_path: str, page_number: int, chunks: 
         "pdf": str(pdf_path),
         "page_number": page_number,
         "chunks_count": len(chunks),
-        "chunks": [
-            {
-                "chunk_index": idx + 1,
-                "char_length": len(chunk),
-                "text": chunk,
-            }
-            for idx, chunk in enumerate(chunks)
-        ],
+        "chunks": chunks,
     }
     with open(chunk_file, "w", encoding="utf-8") as fp:
         json.dump(payload, fp, indent=2, ensure_ascii=False)
@@ -443,10 +494,15 @@ def extract_pages(pdf_path: str) -> list[dict]:
 # ──────────────────────────────────────────────────────────────
 # MAIN PIPELINE
 # ──────────────────────────────────────────────────────────────
-def run_pipeline(pdf_path: str, api_key: str, chunks_dir: Path) -> PipelineResult:
+def run_pipeline(
+    pdf_path: str,
+    api_key: str,
+    chunks_dir: Path,
+    chunks_per_page: int = 4,
+    page_chunk_overlap_chars: int = 180,
+) -> PipelineResult:
     llm = ChatOpenAI(model=MODEL, temperature=0, api_key=api_key)
     chain = build_chain(llm)
-    splitter = build_splitter()
     fallback_splitter = build_fallback_splitter()
 
     pages = extract_pages(pdf_path)
@@ -457,8 +513,13 @@ def run_pipeline(pdf_path: str, api_key: str, chunks_dir: Path) -> PipelineResul
     for page in pages:
         pnum = page["page_number"]
         text = page["text"]
-        chunks = splitter.split_text(text)
-        save_page_chunks(chunks_dir, pdf_path, pnum, chunks)
+        chunk_entries = split_page_into_fixed_chunks(
+            text,
+            num_chunks=chunks_per_page,
+            overlap_chars=page_chunk_overlap_chars,
+        )
+        save_page_chunks(chunks_dir, pdf_path, pnum, chunk_entries)
+        chunks = [entry.get("text", "") for entry in chunk_entries]
 
         # ── Layer 2: Page gate ─────────────────────────────────
         passed, page_hits = check_page_for_variants(text)
@@ -525,6 +586,8 @@ if __name__ == "__main__":
     parser.add_argument("--api-key", default=None,           help="OpenAI API key (or set OPENAI_API_KEY)")
     parser.add_argument("--output",  default="output.json",  help="Output JSON file")
     parser.add_argument("--chunks-dir", default="page_chunks", help="Folder to save per-page chunk JSON files")
+    parser.add_argument("--chunks-per-page", type=int, default=4, help="Number of chunks to split each page into")
+    parser.add_argument("--page-chunk-overlap", type=int, default=180, help="Character overlap between adjacent page chunks")
     args = parser.parse_args()
 
     if args.pdf:
@@ -547,7 +610,13 @@ if __name__ == "__main__":
     print(f"PDF selected: {pdf_path}")
 
     chunks_dir = Path(args.chunks_dir).resolve()
-    result = run_pipeline(str(pdf_path), key, chunks_dir)
+    result = run_pipeline(
+        str(pdf_path),
+        key,
+        chunks_dir,
+        chunks_per_page=args.chunks_per_page,
+        page_chunk_overlap_chars=max(0, args.page_chunk_overlap),
+    )
 
     print("=" * 64)
     print("SUMMARY")

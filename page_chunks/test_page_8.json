@@ -1,17 +1,39 @@
 {
   "pdf": "/home/bittu/Desktop/App-connectivity/start/source_1/test.pdf",
   "page_number": 8,
-  "chunks_count": 2,
+  "chunks_count": 4,
   "chunks": [
     {
       "chunk_index": 1,
-      "char_length": 1749,
-      "text": "Minutes of 33rd Consultation Meeting for Evolving Transmission Schemes in Northern Region held on 05.08.2024\nCriterion Connectivity Start Date of Connectivity Conn BGs requirement\nSl. Application Project Submission Nature of\nApplicant for Quantum Connectivity (As Location (As per\nNo. ID Location Date Applicant\napplying (MW) per Application) Application)\nC. Transmission system for Connectivity under GNA: As per Annexure II\nStart Date of Connectivity under GNA: 31.03.2030(Interim). Final date shall be confirmed upon award of the system\nConnectivi Start Date of Connectivity Conn BGs requirement\nCriterion\nSl. Application Project Submission Nature of ty Connectivity location\nApplicant for\nNo. ID Location Date Applicant Quantum (As per (As per\napplying\n(MW) Application) Application)\nNTPC Jaisalmer\n2200000564\n4. Renewable distt., 15.02.2024 Generator (Solar) SECI LOA 200 16.04.2026 Fatehgarh-IV PS Not Applicable\n(Enhancement)\nEnergy Limited Rajasthan\nIt was informed that in the 31st CMETS NR meeting held on 27.06.2024, it was proposed to grant connectivity to NTPC Renewable at Barmer-II PS at 220 kV level\nthrough S/c line. M/s NTPC informed that they have filed additional applications for about 900 MW in last two months at Fatehgarh-IV PS & requested CTUIL to\ngrant connectivity at 400 kV combinedly for all applications. Regarding this, CTUIL in the 31st CMETS NR meeting had clarified that, as the present application is\nfor 200 MW, connectivity cannot be granted at 400 kV at this stage. However, when the future applications come up for discussion in the subsequent CMETS\nmeetings for grant & if those applications can be accommodated to Barmer-II PS as per application priority, then the connectivity can be granted at 400 kV based"
+      "start": 0,
+      "end": 967,
+      "char_length": 967,
+      "text": "Minutes of 33rd Consultation Meeting for Evolving Transmission Schemes in Northern Region held on 05.08.2024\nCriterion Connectivity Start Date of Connectivity Conn BGs requirement\nSl. Application Project Submission Nature of\nApplicant for Quantum Connectivity (As Location (As per\nNo. ID Location Date Applicant\napplying (MW) per Application) Application)\nC. Transmission system for Connectivity under GNA: As per Annexure II\nStart Date of Connectivity under GNA: 31.03.2030(Interim). Final date shall be confirmed upon award of the system\nConnectivi Start Date of Connectivity Conn BGs requirement\nCriterion\nSl. Application Project Submission Nature of ty Connectivity location\nApplicant for\nNo. ID Location Date Applicant Quantum (As per (As per\napplying\n(MW) Application) Application)\nNTPC Jaisalmer\n2200000564\n4. Renewable distt., 15.02.2024 Generator (Solar) SECI LOA 200 16.04.2026 Fatehgarh-IV PS Not Applicable\n(Enhancement)\nEnergy Limited Rajasthan\nIt was in",
+      "overlap_with_previous": 0
     },
     {
       "chunk_index": 2,
-      "char_length": 1557,
-      "text": "meetings for grant & if those applications can be accommodated to Barmer-II PS as per application priority, then the connectivity can be granted at 400 kV based\non total connectivity quantum at Barmer-II PS. Therefore, at that stage connectivity was considered for grant at 220 kV only. NTPC requested to take up all\napplications together in next CMETS meeting for optimization of DTL. After deliberations, it was decided that the above application shall be again taken up for\ndiscussion in the subsequent CMETS NR meeting along with the other applications of NTPC in Fatehgarh-Barmer complex.\nM/s NTPC in the present meeting informed that they have decided to withdraw the present application due to huge mismatch between start date of connectivity at\nBarmer-II PS & PPA/LOA timeline. The same was confirmed by NTPC Renewable vide mail dated 06.08.2024. Accordingly, the application is decided to be closed\nas per Connectivity & GNA Regulations 2022.\nA2. GNA Applications deferred in the 32nd CMETS NR held on 10.07.2024\nRE\nSl Application Name of the Submission Nature of applicant GNA within GNA Total GNA Start date End date\nRE RE RE\nNo. ID Applicant Date Region (MW) outside Required of GNA of GNA\nRE RE\nRegion (MW) (MW)\n1. 2200000740 Ambuja Cements 03.05.2024 Drawee entity connected to Intra 0 25 25 01.06.2024 30.06.2025\nLimited State Transmission System (revised to (revised to\n01.09.2024) 31.03.2026)\n2. 2200000739 Ambuja Cements 03.05.2024 Drawee entity connected to Intra 0 7 7 01.06.2024 30.06.2025\nLimited State Transmission System\nPage 3 of 98"
+      "start": 607,
+      "end": 1754,
+      "char_length": 1147,
+      "text": "n\nSl. Application Project Submission Nature of ty Connectivity location\nApplicant for\nNo. ID Location Date Applicant Quantum (As per (As per\napplying\n(MW) Application) Application)\nNTPC Jaisalmer\n2200000564\n4. Renewable distt., 15.02.2024 Generator (Solar) SECI LOA 200 16.04.2026 Fatehgarh-IV PS Not Applicable\n(Enhancement)\nEnergy Limited Rajasthan\nIt was informed that in the 31st CMETS NR meeting held on 27.06.2024, it was proposed to grant connectivity to NTPC Renewable at Barmer-II PS at 220 kV level\nthrough S/c line. M/s NTPC informed that they have filed additional applications for about 900 MW in last two months at Fatehgarh-IV PS & requested CTUIL to\ngrant connectivity at 400 kV combinedly for all applications. Regarding this, CTUIL in the 31st CMETS NR meeting had clarified that, as the present application is\nfor 200 MW, connectivity cannot be granted at 400 kV at this stage. However, when the future applications come up for discussion in the subsequent CMETS\nmeetings for grant & if those applications can be accommodated to Barmer-II PS as per application priority, then the connectivity can be granted at 400 kV based\non t",
+      "overlap_with_previous": 360
+    },
+    {
+      "chunk_index": 3,
+      "start": 1394,
+      "end": 2541,
+      "char_length": 1146,
+      "text": "ified that, as the present application is\nfor 200 MW, connectivity cannot be granted at 400 kV at this stage. However, when the future applications come up for discussion in the subsequent CMETS\nmeetings for grant & if those applications can be accommodated to Barmer-II PS as per application priority, then the connectivity can be granted at 400 kV based\non total connectivity quantum at Barmer-II PS. Therefore, at that stage connectivity was considered for grant at 220 kV only. NTPC requested to take up all\napplications together in next CMETS meeting for optimization of DTL. After deliberations, it was decided that the above application shall be again taken up for\ndiscussion in the subsequent CMETS NR meeting along with the other applications of NTPC in Fatehgarh-Barmer complex.\nM/s NTPC in the present meeting informed that they have decided to withdraw the present application due to huge mismatch between start date of connectivity at\nBarmer-II PS & PPA/LOA timeline. The same was confirmed by NTPC Renewable vide mail dated 06.08.2024. Accordingly, the application is decided to be closed\nas per Connectivity & GNA Regulations 2022.",
+      "overlap_with_previous": 360
+    },
+    {
+      "chunk_index": 4,
+      "start": 2181,
+      "end": 3146,
+      "char_length": 965,
+      "text": ".\nM/s NTPC in the present meeting informed that they have decided to withdraw the present application due to huge mismatch between start date of connectivity at\nBarmer-II PS & PPA/LOA timeline. The same was confirmed by NTPC Renewable vide mail dated 06.08.2024. Accordingly, the application is decided to be closed\nas per Connectivity & GNA Regulations 2022.\nA2. GNA Applications deferred in the 32nd CMETS NR held on 10.07.2024\nRE\nSl Application Name of the Submission Nature of applicant GNA within GNA Total GNA Start date End date\nRE RE RE\nNo. ID Applicant Date Region (MW) outside Required of GNA of GNA\nRE RE\nRegion (MW) (MW)\n1. 2200000740 Ambuja Cements 03.05.2024 Drawee entity connected to Intra 0 25 25 01.06.2024 30.06.2025\nLimited State Transmission System (revised to (revised to\n01.09.2024) 31.03.2026)\n2. 2200000739 Ambuja Cements 03.05.2024 Drawee entity connected to Intra 0 7 7 01.06.2024 30.06.2025\nLimited State Transmission System\nPage 3 of 98",
+      "overlap_with_previous": 360
     }
   ]
 }
