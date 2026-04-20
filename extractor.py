@@ -15,26 +15,15 @@ from __future__ import annotations
 
 import re
 import json
-import argparse
-import os
 from pathlib import Path
 from typing import Optional
 
 import pdfplumber
 from pydantic import BaseModel, ConfigDict, Field
-from dotenv import load_dotenv
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-from llm_client import call_llm, extract_text_from_response, parse_bool
-
-# ──────────────────────────────────────────────────────────────
-# CONFIG
-# ──────────────────────────────────────────────────────────────
-MAX_PAGES = 10
-CHUNK_SIZE = 1800
-CHUNK_OVERLAP = 300
-MODEL = "gpt-4o-mini"
-
+from config import CHUNK_OVERLAP, CHUNK_SIZE, MAX_PAGES
+from data_extraction import extract_rows_with_fallback
 
 # ──────────────────────────────────────────────────────────────
 # LAYER 2 — REGEX VARIANT GATE
@@ -148,95 +137,6 @@ class PipelineResult(BaseModel):
     results:               list[PageResult]
 
 
-# ──────────────────────────────────────────────────────────────
-# LAYER 3 — LLM EXTRACTION CHAIN
-# ──────────────────────────────────────────────────────────────
-
-SYSTEM_PROMPT = """\
-You are a precise data extraction assistant.
-You will receive a TEXT CHUNK from a PDF page and a list of column labels detected in this chunk.
-
-Extract table data and return ONLY these output keys:
-1) Project Location
-2) State
-3) substaion
-4) Name of the developers
-5) GNA/ST II Application ID
-6) LTA Application ID
-7) Application Quantum (MW)(ST II)
-8) Nature of Applicant
-9) Mode(Criteria for applying)
-10) Applied Start of Connectivity sought by developer date
-11) Application/Submission Date
-
-Column-name mapping rules:
-- Project Location <- Project Location
-- State <- derive from Project Location (state name only)
-- substaion <- Connectivity Location (As per Application)
-- Name of the developers <- Applicant OR Name of Applicant
-- GNA/ST II Application ID <- Application No. & Date OR Application ID
-- LTA Application ID <- App. No. & Conn. Quantum (MW) of already granted Connectivity
-- Application Quantum (MW)(ST II) <- Installed Capacity (MW) OR Connectivity Quantum (MW)
-- Nature of Applicant <- Nature of Applicant
-- Mode(Criteria for applying) <- Criterion for applying
-- Applied Start of Connectivity sought by developer date <- Start Date of Connectivity (As per Application)
-- Application/Submission Date <- Application No. & Date OR Submission Date (extract only date)
-
-Extraction rules:
-- Extract every visible data row in the chunk.
-- Use null if a value is not available.
-- It is not required that all columns exist in each row; extract what is present and keep others as null.
-- Keep values as strings exactly as seen (except LTA leading-zero cleanup is done later).
-- Ignore headers, footnotes, and explanatory paragraphs.
-- "Name of the developers" must be the applicant/developer company name, not criterion values like "SECI LOA" or "SJVN LOA".
-
-Return JSON only in this exact shape:
-{{
-    "rows": [
-        {{
-            "Project Location": "bulandshahr distt, uttar pradesh",
-            "State": "uttar pradesh",
-            "substaion": "Aligarh (PG)",
-            "Name of the developers": "THDC India Limited",
-            "GNA/ST II Application ID": "1200003683",
-            "LTA Application ID": "0412100008",
-            "Application Quantum (MW)(ST II)": "300",
-            "Nature of Applicant": "Generator (Solar)",
-            "Mode(Criteria for applying)": "SECI LOA",
-            "Applied Start of Connectivity sought by developer date": "16.04.2026",
-            "Application/Submission Date": "15.02.2024"
-        }}
-    ]
-}}
-
-If there is no data row in the chunk: {{"rows": []}}
-"""
-
-USER_TEMPLATE = "Detected column labels in this chunk: {active_fields}\n\nChunk text:\n{chunk}"
-
-
-def _extract_json_payload(text: str) -> dict:
-    """Parse JSON from model text, tolerating code fences."""
-    raw = (text or "").strip()
-    if not raw:
-        return {}
-
-    if raw.startswith("```"):
-        raw = re.sub(r"^```(?:json)?\s*", "", raw, flags=re.IGNORECASE)
-        raw = re.sub(r"\s*```$", "", raw)
-
-    try:
-        return json.loads(raw)
-    except json.JSONDecodeError:
-        match = re.search(r"\{.*\}", raw, flags=re.DOTALL)
-        if not match:
-            return {}
-        try:
-            return json.loads(match.group(0))
-        except json.JSONDecodeError:
-            return {}
-
-
 def build_splitter() -> RecursiveCharacterTextSplitter:
     return RecursiveCharacterTextSplitter(
         chunk_size=CHUNK_SIZE,
@@ -309,80 +209,6 @@ def build_fallback_splitter() -> RecursiveCharacterTextSplitter:
         chunk_overlap=150,
         separators=["\n\n", "\n", " ", ""],
     )
-
-
-def extract_rows_from_chunk(
-    chunk: str,
-    active_fields: list[str],
-    vm_mode: bool,
-    api_key: Optional[str],
-    llm_script_path: Optional[str],
-) -> list[dict]:
-    try:
-        prompt_payload = {
-            "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {
-                    "role": "user",
-                    "content": USER_TEMPLATE.format(
-                        active_fields=", ".join(active_fields),
-                        chunk=chunk,
-                    ),
-                },
-            ],
-            "temperature": 0,
-            "max_tokens": 2000,
-        }
-
-        response_json = call_llm(
-            prompt_payload=prompt_payload,
-            vm=vm_mode,
-            api_key=api_key,
-            model=MODEL,
-            script_path=llm_script_path,
-        )
-        content = extract_text_from_response(response_json)
-        result = _extract_json_payload(content)
-
-        rows = result.get("rows", []) if isinstance(result, dict) else []
-        return rows if isinstance(rows, list) else []
-    except Exception as e:
-        print(f"      [Chain error] {e}")
-        return []
-
-
-def extract_rows_with_fallback(
-    chunk: str,
-    active_fields: list[str],
-    fallback_splitter: RecursiveCharacterTextSplitter,
-    vm_mode: bool,
-    api_key: Optional[str],
-    llm_script_path: Optional[str],
-) -> list[dict]:
-    """Try extraction on full chunk first, then retry with smaller sub-chunks if needed."""
-    primary_rows = extract_rows_from_chunk(
-        chunk,
-        active_fields,
-        vm_mode=vm_mode,
-        api_key=api_key,
-        llm_script_path=llm_script_path,
-    )
-    if primary_rows or len(chunk) < 700:
-        return primary_rows
-
-    fallback_rows: list[dict] = []
-    sub_chunks = fallback_splitter.split_text(chunk)
-    for sub_chunk in sub_chunks:
-        sub_rows = extract_rows_from_chunk(
-            sub_chunk,
-            active_fields,
-            vm_mode=vm_mode,
-            api_key=api_key,
-            llm_script_path=llm_script_path,
-        )
-        fallback_rows.extend(sub_rows)
-
-    return fallback_rows
 
 
 def save_page_chunks(chunks_dir: Path, pdf_path: str, page_number: int, chunks: list[dict]) -> None:
@@ -630,84 +456,3 @@ def run_pipeline(
         total_rows=total_rows,
         results=results,
     )
-
-
-# ──────────────────────────────────────────────────────────────
-# CLI
-# ──────────────────────────────────────────────────────────────
-if __name__ == "__main__":
-    load_dotenv(dotenv_path=Path(__file__).with_name(".env"), override=False)
-
-    parser = argparse.ArgumentParser(description="PDF mapped extraction — chunk regex gate + GPT")
-    parser.add_argument("--source-dir", default="source_1", help="Folder containing PDF files")
-    parser.add_argument("--pdf",     default=None,           help="Path to PDF file (optional; defaults to first PDF in source-dir)")
-    parser.add_argument("--api-key", default=None,           help="OpenAI API key (or set OPENAI_API_KEY)")
-    parser.add_argument("--vm", default=None, help="Use batch LLM mode (true/false). If true, uses llm_client.bat")
-    parser.add_argument("--llm-script", default=None, help="Path to llm_client.bat for VM mode")
-    parser.add_argument("--output",  default="output.json",  help="Output JSON file")
-    parser.add_argument("--chunks-dir", default="page_chunks", help="Folder to save per-page chunk JSON files")
-    parser.add_argument("--chunks-per-page", type=int, default=4, help="Number of chunks to split each page into")
-    parser.add_argument("--page-chunk-overlap", type=int, default=180, help="Character overlap between adjacent page chunks")
-    args = parser.parse_args()
-
-    if args.pdf:
-        pdf_path = Path(args.pdf).resolve()
-    else:
-        source_dir = Path(args.source_dir).resolve()
-        pdfs = sorted(p for p in source_dir.glob("*.pdf") if p.is_file())
-        if not pdfs:
-            raise SystemExit(f"ERROR: No PDF found in {source_dir}. Use --pdf to specify a file.")
-        pdf_path = pdfs[0]
-
-    vm_mode = parse_bool(args.vm, default=parse_bool(os.environ.get("VM"), default=False))
-    key = args.api_key or os.environ.get("OPENAI_API_KEY", "")
-    llm_script_path = args.llm_script or os.environ.get("LLM_SCRIPT_PATH")
-
-    if not vm_mode and not key:
-        raise SystemExit("ERROR: OpenAI API key required when VM mode is false. Use --api-key or set OPENAI_API_KEY in .env.")
-
-    print("=" * 64)
-    print("  PDF MAPPED EXTRACTION PIPELINE (Chunk Regex Gate + GPT-4o-mini)")
-    print("=" * 64)
-
-    print(f"PDF selected: {pdf_path}")
-    print(f"VM mode     : {vm_mode}")
-
-    chunks_dir = Path(args.chunks_dir).resolve()
-    result = run_pipeline(
-        str(pdf_path),
-        key if key else None,
-        chunks_dir,
-        chunks_per_page=args.chunks_per_page,
-        page_chunk_overlap_chars=max(0, args.page_chunk_overlap),
-        vm_mode=vm_mode,
-        llm_script_path=llm_script_path,
-    )
-
-    print("=" * 64)
-    print("SUMMARY")
-    print(f"  Pages extracted  : {result.total_pages_extracted}")
-    print(f"  Pages passed gate: {result.pages_passed_gate}")
-    print(f"  Pages skipped    : {result.pages_skipped}")
-    print(f"  Total rows parsed: {result.total_rows}")
-    print("=" * 64)
-
-    # Serialise with by_alias=True so JSON keys match the mapped output column names
-    output = result.model_dump()
-    for i, page_res in enumerate(output["results"]):
-        page_res["rows"] = [
-            r.model_dump(by_alias=True)
-            for r in result.results[i].rows
-        ]
-
-    with open(args.output, "w", encoding="utf-8") as f:
-        json.dump(output, f, indent=2, ensure_ascii=False)
-    print(f"\nOutput saved → {args.output}")
-    print(f"Chunk files saved → {chunks_dir}")
-
-    # Preview first 3 rows
-    if result.results:
-        first = result.results[0]
-        print(f"\nPreview — Page {first.page_number}:")
-        for row in first.rows[:3]:
-            print(json.dumps(row.model_dump(by_alias=True), indent=2, ensure_ascii=False))

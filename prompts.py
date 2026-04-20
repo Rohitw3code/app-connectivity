@@ -1,0 +1,89 @@
+from __future__ import annotations
+
+from typing import Any
+
+
+SYSTEM_PROMPT = """\
+You are a precise data extraction assistant.
+You will receive a TEXT CHUNK from a PDF page and a list of column labels detected in this chunk.
+
+Extract table data and return ONLY these output keys:
+1) Project Location
+2) State
+3) substaion
+4) Name of the developers
+5) GNA/ST II Application ID
+6) LTA Application ID
+7) Application Quantum (MW)(ST II)
+8) Nature of Applicant
+9) Mode(Criteria for applying)
+10) Applied Start of Connectivity sought by developer date
+11) Application/Submission Date
+
+Column-name mapping rules:
+- Project Location <- Project Location
+- State <- derive from Project Location (state name only)
+- substaion <- Connectivity Location (As per Application)
+- Name of the developers <- Applicant OR Name of Applicant
+- GNA/ST II Application ID <- Application No. & Date OR Application ID
+- LTA Application ID <- App. No. & Conn. Quantum (MW) of already granted Connectivity
+- Application Quantum (MW)(ST II) <- Installed Capacity (MW) OR Connectivity Quantum (MW)
+- Nature of Applicant <- Nature of Applicant
+- Mode(Criteria for applying) <- Criterion for applying
+- Applied Start of Connectivity sought by developer date <- Start Date of Connectivity (As per Application)
+- Application/Submission Date <- Application No. & Date OR Submission Date (extract only date)
+
+Extraction rules:
+- Extract every visible data row in the chunk.
+- Use null if a value is not available.
+- It is not required that all columns exist in each row; extract what is present and keep others as null.
+- Keep values as strings exactly as seen (except LTA leading-zero cleanup is done later).
+- Ignore headers, footnotes, and explanatory paragraphs.
+- "Name of the developers" must be the applicant/developer company name, not criterion values like "SECI LOA" or "SJVN LOA".
+
+Return JSON only in this exact shape:
+{{
+    "rows": [
+        {{
+            "Project Location": "bulandshahr distt, uttar pradesh",
+            "State": "uttar pradesh",
+            "substaion": "Aligarh (PG)",
+            "Name of the developers": "THDC India Limited",
+            "GNA/ST II Application ID": "1200003683",
+            "LTA Application ID": "0412100008",
+            "Application Quantum (MW)(ST II)": "300",
+            "Nature of Applicant": "Generator (Solar)",
+            "Mode(Criteria for applying)": "SECI LOA",
+            "Applied Start of Connectivity sought by developer date": "16.04.2026",
+            "Application/Submission Date": "15.02.2024"
+        }}
+    ]
+}}
+
+If there is no data row in the chunk: {{"rows": []}}
+"""
+
+USER_TEMPLATE = "Detected column labels in this chunk: {active_fields}\n\nChunk text:\n{chunk}"
+
+
+def build_prompt_payload(
+    chunk: str,
+    active_fields: list[str],
+    *,
+    temperature: float = 0,
+    max_tokens: int = 2000,
+) -> dict[str, Any]:
+    return {
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {
+                "role": "user",
+                "content": USER_TEMPLATE.format(
+                    active_fields=", ".join(active_fields),
+                    chunk=chunk,
+                ),
+            },
+        ],
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+    }
