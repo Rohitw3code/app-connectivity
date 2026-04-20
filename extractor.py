@@ -8,6 +8,7 @@ Layer 3 : LangChain + GPT-4o-mini + Pydantic — chunk each page, extract rows
 Usage:
     python pdf_pipeline.py --pdf test.pdf --api-key sk-...
     (or set OPENAI_API_KEY env variable)
+    Set VM=true to use llm_client.bat path instead of direct OpenAI API.
 """
 
 from __future__ import annotations
@@ -22,10 +23,9 @@ from typing import Optional
 import pdfplumber
 from pydantic import BaseModel, ConfigDict, Field
 from dotenv import load_dotenv
-from langchain_openai import ChatOpenAI
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.output_parsers import JsonOutputParser
+
+from llm_client import call_llm, extract_text_from_response, parse_bool
 
 # ──────────────────────────────────────────────────────────────
 # CONFIG
@@ -149,7 +149,7 @@ class PipelineResult(BaseModel):
 
 
 # ──────────────────────────────────────────────────────────────
-# LAYER 3 — LANGCHAIN EXTRACTION CHAIN
+# LAYER 3 — LLM EXTRACTION CHAIN
 # ──────────────────────────────────────────────────────────────
 
 SYSTEM_PROMPT = """\
@@ -215,14 +215,26 @@ If there is no data row in the chunk: {{"rows": []}}
 USER_TEMPLATE = "Detected column labels in this chunk: {active_fields}\n\nChunk text:\n{chunk}"
 
 
-def build_chain(llm: ChatOpenAI) -> object:
-    """Build a LangChain LCEL chain: prompt | llm | json_parser."""
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", SYSTEM_PROMPT),
-        ("human",  USER_TEMPLATE),
-    ])
-    parser = JsonOutputParser()
-    return prompt | llm | parser
+def _extract_json_payload(text: str) -> dict:
+    """Parse JSON from model text, tolerating code fences."""
+    raw = (text or "").strip()
+    if not raw:
+        return {}
+
+    if raw.startswith("```"):
+        raw = re.sub(r"^```(?:json)?\s*", "", raw, flags=re.IGNORECASE)
+        raw = re.sub(r"\s*```$", "", raw)
+
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        match = re.search(r"\{.*\}", raw, flags=re.DOTALL)
+        if not match:
+            return {}
+        try:
+            return json.loads(match.group(0))
+        except json.JSONDecodeError:
+            return {}
 
 
 def build_splitter() -> RecursiveCharacterTextSplitter:
@@ -299,15 +311,40 @@ def build_fallback_splitter() -> RecursiveCharacterTextSplitter:
     )
 
 
-def extract_rows_from_chunk(chain, chunk: str, active_fields: list[str]) -> list[dict]:
+def extract_rows_from_chunk(
+    chunk: str,
+    active_fields: list[str],
+    vm_mode: bool,
+    api_key: Optional[str],
+    llm_script_path: Optional[str],
+) -> list[dict]:
     try:
-        result = chain.invoke({"chunk": chunk, "active_fields": ", ".join(active_fields)})
-        if isinstance(result, dict):
-            rows = result.get("rows", [])
-        elif isinstance(result, list):
-            rows = result
-        else:
-            rows = []
+        prompt_payload = {
+            "messages": [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {
+                    "role": "user",
+                    "content": USER_TEMPLATE.format(
+                        active_fields=", ".join(active_fields),
+                        chunk=chunk,
+                    ),
+                },
+            ],
+            "temperature": 0,
+            "max_tokens": 2000,
+        }
+
+        response_json = call_llm(
+            prompt_payload=prompt_payload,
+            vm=vm_mode,
+            api_key=api_key,
+            model=MODEL,
+            script_path=llm_script_path,
+        )
+        content = extract_text_from_response(response_json)
+        result = _extract_json_payload(content)
+
+        rows = result.get("rows", []) if isinstance(result, dict) else []
         return rows if isinstance(rows, list) else []
     except Exception as e:
         print(f"      [Chain error] {e}")
@@ -315,20 +352,34 @@ def extract_rows_from_chunk(chain, chunk: str, active_fields: list[str]) -> list
 
 
 def extract_rows_with_fallback(
-    chain,
     chunk: str,
     active_fields: list[str],
     fallback_splitter: RecursiveCharacterTextSplitter,
+    vm_mode: bool,
+    api_key: Optional[str],
+    llm_script_path: Optional[str],
 ) -> list[dict]:
     """Try extraction on full chunk first, then retry with smaller sub-chunks if needed."""
-    primary_rows = extract_rows_from_chunk(chain, chunk, active_fields)
+    primary_rows = extract_rows_from_chunk(
+        chunk,
+        active_fields,
+        vm_mode=vm_mode,
+        api_key=api_key,
+        llm_script_path=llm_script_path,
+    )
     if primary_rows or len(chunk) < 700:
         return primary_rows
 
     fallback_rows: list[dict] = []
     sub_chunks = fallback_splitter.split_text(chunk)
     for sub_chunk in sub_chunks:
-        sub_rows = extract_rows_from_chunk(chain, sub_chunk, active_fields)
+        sub_rows = extract_rows_from_chunk(
+            sub_chunk,
+            active_fields,
+            vm_mode=vm_mode,
+            api_key=api_key,
+            llm_script_path=llm_script_path,
+        )
         fallback_rows.extend(sub_rows)
 
     return fallback_rows
@@ -496,13 +547,13 @@ def extract_pages(pdf_path: str) -> list[dict]:
 # ──────────────────────────────────────────────────────────────
 def run_pipeline(
     pdf_path: str,
-    api_key: str,
+    api_key: Optional[str],
     chunks_dir: Path,
     chunks_per_page: int = 4,
     page_chunk_overlap_chars: int = 180,
+    vm_mode: bool = False,
+    llm_script_path: Optional[str] = None,
 ) -> PipelineResult:
-    llm = ChatOpenAI(model=MODEL, temperature=0, api_key=api_key)
-    chain = build_chain(llm)
     fallback_splitter = build_fallback_splitter()
 
     pages = extract_pages(pdf_path)
@@ -548,7 +599,14 @@ def run_pipeline(
                 end="",
                 flush=True,
             )
-            raw = extract_rows_with_fallback(chain, chunk, active_fields, fallback_splitter)
+            raw = extract_rows_with_fallback(
+                chunk,
+                active_fields,
+                fallback_splitter,
+                vm_mode=vm_mode,
+                api_key=api_key,
+                llm_script_path=llm_script_path,
+            )
             print(f" → {len(raw)} row(s)")
             all_raw.extend(raw)
 
@@ -584,6 +642,8 @@ if __name__ == "__main__":
     parser.add_argument("--source-dir", default="source_1", help="Folder containing PDF files")
     parser.add_argument("--pdf",     default=None,           help="Path to PDF file (optional; defaults to first PDF in source-dir)")
     parser.add_argument("--api-key", default=None,           help="OpenAI API key (or set OPENAI_API_KEY)")
+    parser.add_argument("--vm", default=None, help="Use batch LLM mode (true/false). If true, uses llm_client.bat")
+    parser.add_argument("--llm-script", default=None, help="Path to llm_client.bat for VM mode")
     parser.add_argument("--output",  default="output.json",  help="Output JSON file")
     parser.add_argument("--chunks-dir", default="page_chunks", help="Folder to save per-page chunk JSON files")
     parser.add_argument("--chunks-per-page", type=int, default=4, help="Number of chunks to split each page into")
@@ -599,23 +659,29 @@ if __name__ == "__main__":
             raise SystemExit(f"ERROR: No PDF found in {source_dir}. Use --pdf to specify a file.")
         pdf_path = pdfs[0]
 
+    vm_mode = parse_bool(args.vm, default=parse_bool(os.environ.get("VM"), default=False))
     key = args.api_key or os.environ.get("OPENAI_API_KEY", "")
-    if not key:
-        raise SystemExit("ERROR: OpenAI API key required. Use --api-key or set OPENAI_API_KEY in .env.")
+    llm_script_path = args.llm_script or os.environ.get("LLM_SCRIPT_PATH")
+
+    if not vm_mode and not key:
+        raise SystemExit("ERROR: OpenAI API key required when VM mode is false. Use --api-key or set OPENAI_API_KEY in .env.")
 
     print("=" * 64)
     print("  PDF MAPPED EXTRACTION PIPELINE (Chunk Regex Gate + GPT-4o-mini)")
     print("=" * 64)
 
     print(f"PDF selected: {pdf_path}")
+    print(f"VM mode     : {vm_mode}")
 
     chunks_dir = Path(args.chunks_dir).resolve()
     result = run_pipeline(
         str(pdf_path),
-        key,
+        key if key else None,
         chunks_dir,
         chunks_per_page=args.chunks_per_page,
         page_chunk_overlap_chars=max(0, args.page_chunk_overlap),
+        vm_mode=vm_mode,
+        llm_script_path=llm_script_path,
     )
 
     print("=" * 64)
