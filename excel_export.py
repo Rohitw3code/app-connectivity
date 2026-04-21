@@ -21,6 +21,12 @@ DATA_COLUMNS = [
     "Mode(Criteria for applying)",
     "Applied Start of Connectivity sought by developer date( start date of connectivity as per the application)",
     "Application/Submission Date",
+    "GNA Operationalization Date",
+    "GNA Operationalization (Yes/No)",
+    "Status of application(Withdrawn / granted. Revoked.)",
+    "PSP MWh",
+    "PSP Injection (MW)",
+    "PSP Drawl (MW)",
 ]
 
 

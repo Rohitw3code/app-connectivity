@@ -20,6 +20,12 @@ Extract table data and return ONLY these output keys:
 10) Mode(Criteria for applying)
 11) Applied Start of Connectivity sought by developer date
 12) Application/Submission Date
+13) GNA Operationalization Date
+14) GNA Operationalization (Yes/No)
+15) Status of application(Withdrawn / granted. Revoked.)
+16) PSP MWh
+17) PSP Injection (MW)
+18) PSP Drawl (MW)
 
 Column-name mapping rules:
 - Project Location <- Project Location
@@ -34,6 +40,10 @@ Column-name mapping rules:
 - Mode(Criteria for applying) <- Criterion for applying
 - Applied Start of Connectivity sought by developer date <- Start Date of Connectivity (As per Application)
 - Application/Submission Date <- Application No. & Date OR Submission Date (extract only date)
+- GNA Operationalization Date <- from table description text (often near SCoD / last line of description)
+- GNA Operationalization (Yes/No) <- keep null if not derivable from text; final rule is applied in post-processing
+- Status of application(Withdrawn / granted. Revoked.) <- from description/status wording
+- PSP MWh / PSP Injection (MW) / PSP Drawl (MW) <- only when pump storage / PSP context is present in description
 
 Rules for "Application ID under Enhancement 5.2 or revision":
 - Populate this field only when the row/chunk indicates enhancement/revision context (e.g., "5.2", "regulation 5.2", "enhancement", "revision"). Otherwise set null.
@@ -50,6 +60,9 @@ Extraction rules:
 - Keep values as strings exactly as seen (except LTA leading-zero cleanup is done later).
 - Ignore headers, footnotes, and explanatory paragraphs.
 - "Name of the developers" must be the applicant/developer company name, not criterion values like "SECI LOA" or "SJVN LOA".
+- For "GNA Operationalization Date" look in description text around terms like SCoD/SCOD and in the last line.
+- For "Status of application(Withdrawn / granted. Revoked.)" map close words to one of: Withdrawn / granted / Revoked.
+- For PSP values, only fill when pump storage / PSP wording is present.
 
 Return JSON only in this exact shape:
 {{
@@ -66,7 +79,13 @@ Return JSON only in this exact shape:
             "Nature of Applicant": "Generator (Solar)",
             "Mode(Criteria for applying)": "SECI LOA",
             "Applied Start of Connectivity sought by developer date": "16.04.2026",
-            "Application/Submission Date": "15.02.2024"
+            "Application/Submission Date": "15.02.2024",
+            "GNA Operationalization Date": "31.03.2030",
+            "GNA Operationalization (Yes/No)": "Yes",
+            "Status of application(Withdrawn / granted. Revoked.)": "granted",
+            "PSP MWh": "596",
+            "PSP Injection (MW)": "520",
+            "PSP Drawl (MW)": "596"
         }}
     ]
 }}

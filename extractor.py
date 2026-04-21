@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import re
 import json
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -70,6 +71,20 @@ TARGET_COLUMN_VARIANTS: dict[str, list[list[str]]] = {
     "Application/Submission Date": [
         [r"\bApplication\b", r"\bNo\b", r"\bDate\b"],
         [r"\bSubmission\b", r"\bDate\b"],
+    ],
+    "GNA Operationalization Date": [
+        [r"\bGNA\b", r"\bOperationalization\b"],
+        [r"\bSCoD\b"],
+        [r"\bSCOD\b"],
+    ],
+    "Status of application(Withdrawn / granted. Revoked.)": [
+        [r"\bWithdrawn\b"],
+        [r"\bgrant(?:ed)?\b"],
+        [r"\bRevoked\b"],
+    ],
+    "PSP MWh": [
+        [r"\bpump\s*storage\b"],
+        [r"\bPSP\b"],
     ],
 }
 
@@ -130,6 +145,14 @@ class MappedRow(BaseModel):
         None, alias="Applied Start of Connectivity sought by developer date"
     )
     application_submission_date: Optional[str] = Field(None, alias="Application/Submission Date")
+    gna_operationalization_date: Optional[str] = Field(None, alias="GNA Operationalization Date")
+    gna_operationalization_yes_no: Optional[str] = Field(None, alias="GNA Operationalization (Yes/No)")
+    status_of_application: Optional[str] = Field(
+        None, alias="Status of application(Withdrawn / granted. Revoked.)"
+    )
+    psp_mwh: Optional[str] = Field(None, alias="PSP MWh")
+    psp_injection_mw: Optional[str] = Field(None, alias="PSP Injection (MW)")
+    psp_drawl_mw: Optional[str] = Field(None, alias="PSP Drawl (MW)")
 
 class PageResult(BaseModel):
     page_number:  int
@@ -381,6 +404,70 @@ def _extract_date(value: Optional[str]) -> Optional[str]:
     return None
 
 
+def _parse_date_object(value: Optional[str]) -> Optional[datetime]:
+    extracted = _extract_date(value)
+    if not extracted:
+        return None
+
+    normalized = extracted.replace("/", ".").replace("-", ".")
+    for fmt in ("%d.%m.%Y", "%Y.%m.%d"):
+        try:
+            return datetime.strptime(normalized, fmt)
+        except ValueError:
+            pass
+    return None
+
+
+def _derive_gna_operationalization_yes_no(gna_date: Optional[str]) -> Optional[str]:
+    dt = _parse_date_object(gna_date)
+    if not dt:
+        return None
+    return "Yes" if dt.date() > datetime.now().date() else "No"
+
+
+def _normalize_application_status(value: Optional[str]) -> Optional[str]:
+    value = _clean_value(value)
+    if not value:
+        return None
+
+    lower = value.lower()
+    if "withdraw" in lower:
+        return "Withdrawn"
+    if "revoke" in lower:
+        return "Revoked"
+    if "grant" in lower:
+        return "granted"
+    return value
+
+
+def _extract_psp_subcolumns(*values: Optional[str]) -> tuple[Optional[str], Optional[str], Optional[str]]:
+    text = " ".join(str(v or "") for v in values)
+    if not re.search(r"\b(pump\s*storage|psp)\b", text, flags=re.IGNORECASE):
+        return None, None, None
+
+    # MWh (or first total number near "for <num> MW/MWh")
+    mwh = None
+    mwh_match = re.search(r"for\s+(\d+(?:\.\d+)?)\s*(?:MWh|MW)", text, flags=re.IGNORECASE)
+    if mwh_match:
+        mwh = mwh_match.group(1)
+    else:
+        generic_mwh = re.search(r"(\d+(?:\.\d+)?)\s*MWh", text, flags=re.IGNORECASE)
+        if generic_mwh:
+            mwh = generic_mwh.group(1)
+
+    inj = None
+    inj_match = re.search(r"(?:max\s*)?injection\s*[:\-]?\s*(\d+(?:\.\d+)?)", text, flags=re.IGNORECASE)
+    if inj_match:
+        inj = inj_match.group(1)
+
+    drawl = None
+    drawl_match = re.search(r"(?:max\s*)?(?:drawl|drawal)\s*[:\-]?\s*(\d+(?:\.\d+)?)", text, flags=re.IGNORECASE)
+    if drawl_match:
+        drawl = drawl_match.group(1)
+
+    return mwh, inj, drawl
+
+
 def _normalize_developer_name(value: Optional[str]) -> Optional[str]:
     value = _clean_value(value)
     if not value:
@@ -402,6 +489,11 @@ def normalize_rows(rows: list[MappedRow]) -> list[MappedRow]:
         raw_lta = payload.get("LTA Application ID")
         raw_mode = payload.get("Mode(Criteria for applying)")
         raw_enhancement = payload.get("Application ID under Enhancement 5.2 or revision")
+        raw_gna_operationalization_date = payload.get("GNA Operationalization Date")
+        raw_status = payload.get("Status of application(Withdrawn / granted. Revoked.)")
+        raw_psp_mwh = payload.get("PSP MWh")
+        raw_psp_injection = payload.get("PSP Injection (MW)")
+        raw_psp_drawl = payload.get("PSP Drawl (MW)")
 
         payload["Project Location"] = _clean_value(payload.get("Project Location"))
         payload["State"] = _extract_state(payload.get("Project Location"))
@@ -430,6 +522,23 @@ def normalize_rows(rows: list[MappedRow]) -> list[MappedRow]:
         payload["Application/Submission Date"] = _extract_date(
             payload.get("Application/Submission Date")
         )
+
+        payload["GNA Operationalization Date"] = _extract_date(raw_gna_operationalization_date)
+        payload["GNA Operationalization (Yes/No)"] = _derive_gna_operationalization_yes_no(
+            payload.get("GNA Operationalization Date")
+        )
+        payload["Status of application(Withdrawn / granted. Revoked.)"] = _normalize_application_status(raw_status)
+
+        psp_mwh, psp_inj, psp_drawl = _extract_psp_subcolumns(
+            raw_psp_mwh,
+            raw_psp_injection,
+            raw_psp_drawl,
+            raw_mode,
+        )
+        payload["PSP MWh"] = _clean_value(psp_mwh or raw_psp_mwh)
+        payload["PSP Injection (MW)"] = _clean_value(psp_inj or raw_psp_injection)
+        payload["PSP Drawl (MW)"] = _clean_value(psp_drawl or raw_psp_drawl)
+
         normalized.append(MappedRow.model_validate(payload))
     return normalized
 
