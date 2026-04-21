@@ -124,35 +124,107 @@ def check_chunk_for_variants(chunk: str) -> tuple[bool, dict[str, bool]]:
 
 
 # ──────────────────────────────────────────────────────────────
-# PYDANTIC MODELS
+# PYDANTIC MODELS (per-column)
 # ──────────────────────────────────────────────────────────────
-class MappedRow(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-
+class ProjectLocationColumn(BaseModel):
     project_location: Optional[str] = Field(None, alias="Project Location")
+
+
+class StateColumn(BaseModel):
     state: Optional[str] = Field(None, alias="State")
+
+
+class SubstaionColumn(BaseModel):
     substaion: Optional[str] = Field(None, alias="substaion")
+
+
+class DeveloperNameColumn(BaseModel):
     name_of_the_developers: Optional[str] = Field(None, alias="Name of the developers")
+
+
+class GnaStIiApplicationIdColumn(BaseModel):
     gna_st_ii_application_id: Optional[str] = Field(None, alias="GNA/ST II Application ID")
+
+
+class LtaApplicationIdColumn(BaseModel):
     lta_application_id: Optional[str] = Field(None, alias="LTA Application ID")
+
+
+class EnhancementApplicationIdColumn(BaseModel):
     application_id_under_enhancement_5_2_or_revision: Optional[str] = Field(
         None, alias="Application ID under Enhancement 5.2 or revision"
     )
+
+
+class ApplicationQuantumColumn(BaseModel):
     application_quantum_mw_st_ii: Optional[str] = Field(None, alias="Application Quantum (MW)(ST II)")
+
+
+class NatureOfApplicantColumn(BaseModel):
     nature_of_applicant: Optional[str] = Field(None, alias="Nature of Applicant")
+
+
+class ModeCriteriaColumn(BaseModel):
     mode_criteria_for_applying: Optional[str] = Field(None, alias="Mode(Criteria for applying)")
+
+
+class AppliedStartConnectivityDateColumn(BaseModel):
     applied_start_connectivity_date: Optional[str] = Field(
         None, alias="Applied Start of Connectivity sought by developer date"
     )
+
+
+class ApplicationSubmissionDateColumn(BaseModel):
     application_submission_date: Optional[str] = Field(None, alias="Application/Submission Date")
+
+
+class GnaOperationalizationDateColumn(BaseModel):
     gna_operationalization_date: Optional[str] = Field(None, alias="GNA Operationalization Date")
+
+
+class GnaOperationalizationYesNoColumn(BaseModel):
     gna_operationalization_yes_no: Optional[str] = Field(None, alias="GNA Operationalization (Yes/No)")
+
+
+class ApplicationStatusColumn(BaseModel):
     status_of_application: Optional[str] = Field(
         None, alias="Status of application(Withdrawn / granted. Revoked.)"
     )
+
+
+class PspMwhColumn(BaseModel):
     psp_mwh: Optional[str] = Field(None, alias="PSP MWh")
+
+
+class PspInjectionColumn(BaseModel):
     psp_injection_mw: Optional[str] = Field(None, alias="PSP Injection (MW)")
+
+
+class PspDrawlColumn(BaseModel):
     psp_drawl_mw: Optional[str] = Field(None, alias="PSP Drawl (MW)")
+
+
+class MappedRow(
+    ProjectLocationColumn,
+    StateColumn,
+    SubstaionColumn,
+    DeveloperNameColumn,
+    GnaStIiApplicationIdColumn,
+    LtaApplicationIdColumn,
+    EnhancementApplicationIdColumn,
+    ApplicationQuantumColumn,
+    NatureOfApplicantColumn,
+    ModeCriteriaColumn,
+    AppliedStartConnectivityDateColumn,
+    ApplicationSubmissionDateColumn,
+    GnaOperationalizationDateColumn,
+    GnaOperationalizationYesNoColumn,
+    ApplicationStatusColumn,
+    PspMwhColumn,
+    PspInjectionColumn,
+    PspDrawlColumn,
+):
+    model_config = ConfigDict(populate_by_name=True)
 
 class PageResult(BaseModel):
     page_number:  int

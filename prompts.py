@@ -41,7 +41,7 @@ Column-name mapping rules:
 - Applied Start of Connectivity sought by developer date <- Start Date of Connectivity (As per Application)
 - Application/Submission Date <- Application No. & Date OR Submission Date (extract only date)
 - GNA Operationalization Date <- from table description text (often near SCoD / last line of description)
-- GNA Operationalization (Yes/No) <- keep null if not derivable from text; final rule is applied in post-processing
+- GNA Operationalization (Yes/No) <- derived from GNA Operationalization Date in post-processing (date > current date => Yes else No); model can return null
 - Status of application(Withdrawn / granted. Revoked.) <- from description/status wording
 - PSP MWh / PSP Injection (MW) / PSP Drawl (MW) <- only when pump storage / PSP context is present in description
 
@@ -61,6 +61,7 @@ Extraction rules:
 - Ignore headers, footnotes, and explanatory paragraphs.
 - "Name of the developers" must be the applicant/developer company name, not criterion values like "SECI LOA" or "SJVN LOA".
 - For "GNA Operationalization Date" look in description text around terms like SCoD/SCOD and in the last line.
+- For "GNA Operationalization (Yes/No)", prefer null when uncertain since it is computed after extraction.
 - For "Status of application(Withdrawn / granted. Revoked.)" map close words to one of: Withdrawn / granted / Revoked.
 - For PSP values, only fill when pump storage / PSP wording is present.
 
