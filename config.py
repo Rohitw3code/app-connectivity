@@ -7,8 +7,6 @@ from typing import Optional
 
 from dotenv import load_dotenv
 
-from llm_client import parse_bool
-
 
 # Pipeline defaults
 # MAX_PAGES:
@@ -20,6 +18,11 @@ CHUNK_OVERLAP = 300
 MODEL = "gpt-4o-mini"
 DEFAULT_CHUNKS_PER_PAGE = 4
 DEFAULT_PAGE_CHUNK_OVERLAP = 180
+
+# Single switch for runtime mode:
+#   "laptop" -> direct OpenAI API key mode
+#   "vm"     -> script-based VM mode
+EXECUTION_TARGET = "laptop"
 
 
 @dataclass(frozen=True)
@@ -35,7 +38,6 @@ class RuntimeConfig:
 def load_runtime_config(
     *,
     mode_override: Optional[str] = None,
-    vm_override: Optional[str] = None,
     api_key_override: Optional[str] = None,
     llm_script_override: Optional[str] = None,
 ) -> RuntimeConfig:
@@ -48,26 +50,16 @@ def load_runtime_config(
     3) defaults
 
     Supported env variables:
-    - EXECUTION_TARGET: "vm" or "laptop" (default: "laptop")
-    - VM: true/false (optional legacy override)
     - OPENAI_API_KEY
     - LLM_SCRIPT_PATH
     """
     load_dotenv(dotenv_path=Path(__file__).with_name(".env"), override=False)
 
-    env_target = (os.getenv("EXECUTION_TARGET") or "laptop").strip().lower()
-    if env_target not in {"vm", "laptop"}:
-        env_target = "laptop"
-
-    requested_target = (mode_override or env_target).strip().lower()
+    requested_target = (mode_override or EXECUTION_TARGET).strip().lower()
     if requested_target not in {"vm", "laptop"}:
         requested_target = "laptop"
 
-    default_vm_from_target = requested_target == "vm"
-    vm_mode = parse_bool(
-        vm_override,
-        default=parse_bool(os.getenv("VM"), default=default_vm_from_target),
-    )
+    vm_mode = requested_target == "vm"
 
     api_key = (api_key_override or os.getenv("OPENAI_API_KEY") or "").strip()
     llm_script_path = (llm_script_override or os.getenv("LLM_SCRIPT_PATH") or "").strip() or None

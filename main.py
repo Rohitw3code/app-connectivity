@@ -37,8 +37,7 @@ def main() -> None:
     parser.add_argument("--source-dir", default="source_1", help="Folder containing PDF files")
     parser.add_argument("--pdf", default=None, help="Path to a single PDF file (optional; by default all PDFs in source-dir are processed)")
 
-    parser.add_argument("--mode", choices=["vm", "laptop"], default=None, help="Execution target from config: vm or laptop")
-    parser.add_argument("--vm", default=None, help="Legacy bool override for VM mode (true/false)")
+    parser.add_argument("--mode", choices=["vm", "laptop"], default=None, help="Optional override for config EXECUTION_TARGET")
     parser.add_argument("--api-key", default=None, help="OpenAI API key override")
     parser.add_argument("--llm-script", default=None, help="Path to llm_client.bat for VM mode")
 
@@ -51,7 +50,6 @@ def main() -> None:
 
     runtime = load_runtime_config(
         mode_override=args.mode,
-        vm_override=args.vm,
         api_key_override=args.api_key,
         llm_script_override=args.llm_script,
     )

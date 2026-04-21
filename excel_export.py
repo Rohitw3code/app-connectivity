@@ -19,7 +19,7 @@ DATA_COLUMNS = [
     "Application Quantum (MW)(ST II)",
     "Nature of Applicant",
     "Mode(Criteria for applying)",
-    "Applied Start of Connectivity sought by developer date",
+    "Applied Start of Connectivity sought by developer date( start date of connectivity as per the application)",
     "Application/Submission Date",
 ]
 
@@ -38,6 +38,14 @@ def _flatten_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
                 }
                 for col in DATA_COLUMNS[2:]:
                     record[col] = row.get(col)
+
+                # Backward/alias mapping for start date column naming in sheet.
+                record[
+                    "Applied Start of Connectivity sought by developer date( start date of connectivity as per the application)"
+                ] = (
+                    row.get("Applied Start of Connectivity sought by developer date")
+                    or row.get("Start Date of Connectivity (As per Application)")
+                )
                 records.append(record)
 
     return records
