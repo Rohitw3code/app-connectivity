@@ -11,6 +11,9 @@ from llm_client import parse_bool
 
 
 # Pipeline defaults
+# MAX_PAGES:
+#   > 0  -> process first N pages per PDF
+#   = -1 -> process all pages per PDF
 MAX_PAGES = 10
 CHUNK_SIZE = 1800
 CHUNK_OVERLAP = 300

@@ -5,3 +5,4 @@ langchain-core==0.3.79
 langchain-openai==0.3.35
 langchain-text-splitters==0.3.11
 openai==2.1.0
+openpyxl==3.1.5

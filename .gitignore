@@ -2,3 +2,4 @@ venv
 .env
 __pycache__/
 llm_client.bat
+page_chunks

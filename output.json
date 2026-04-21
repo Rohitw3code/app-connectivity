@@ -1,166 +1,96 @@
 {
-  "pdf_path": "/home/bittu/Desktop/App-connectivity/start/source_1/test.pdf",
+  "pdfs_processed": 1,
   "total_pages_extracted": 10,
-  "pages_passed_gate": 5,
-  "pages_skipped": 5,
-  "total_rows": 10,
+  "total_pages_passed_gate": 7,
+  "total_pages_skipped": 3,
+  "total_rows": 3,
   "results": [
     {
-      "page_number": 6,
-      "rows_found": 1,
-      "rows": [
+      "pdf_path": "/home/bittu/Desktop/App-connectivity/start/source_1/177185140447Minutes of 43rd CMETS NR meeting held on 12.01.2026_F.pdf",
+      "total_pages_extracted": 10,
+      "pages_passed_gate": 7,
+      "pages_skipped": 3,
+      "total_rows": 3,
+      "results": [
         {
-          "Project Location": "Jodhpur distt., Rajasthan",
-          "State": "rajasthan",
-          "substaion": null,
-          "Name of the developers": "Renew Power Private Limited",
-          "GNA/ST II Application ID": "2200000516",
-          "LTA Application ID": null,
-          "Application Quantum (MW)(ST II)": "300",
-          "Nature of Applicant": "Generator (Solar)",
-          "Mode(Criteria for applying)": "SECI LOA",
-          "Applied Start of Connectivity sought by developer date": "30.09.2026",
-          "Application/Submission Date": "25.01.2024"
-        }
-      ]
-    },
-    {
-      "page_number": 7,
-      "rows_found": 0,
-      "rows": []
-    },
-    {
-      "page_number": 8,
-      "rows_found": 3,
-      "rows": [
-        {
-          "Project Location": "Jaisalmer distt., Rajasthan",
-          "State": "rajasthan",
-          "substaion": "Fatehgarh-IV PS",
-          "Name of the developers": "NTPC Renewable Energy Limited",
-          "GNA/ST II Application ID": "2200000564",
-          "LTA Application ID": null,
-          "Application Quantum (MW)(ST II)": "200",
-          "Nature of Applicant": "Generator (Solar)",
-          "Mode(Criteria for applying)": "SECI LOA",
-          "Applied Start of Connectivity sought by developer date": "16.04.2026",
-          "Application/Submission Date": "15.02.2024"
+          "page_number": 4,
+          "rows_found": 1,
+          "rows": [
+            {
+              "Project Location": "bulandshahr distt, uttar pradesh",
+              "State": "uttar pradesh",
+              "substaion": "Aligarh (PG)",
+              "Name of the developers": "THDC India Limited",
+              "GNA/ST II Application ID": "2200001981",
+              "LTA Application ID": null,
+              "Application ID under Enhancement 5.2 or revision": null,
+              "Application Quantum (MW)(ST II)": "11",
+              "Nature of Applicant": "Generator (Solar)",
+              "Mode(Criteria for applying)": "REGS",
+              "Applied Start of Connectivity sought by developer date": "15.06.2025",
+              "Application/Submission Date": "28.04.2025"
+            }
+          ]
         },
         {
-          "Project Location": null,
-          "State": null,
-          "substaion": null,
-          "Name of the developers": "Ambuja Cements Limited",
-          "GNA/ST II Application ID": "2200000740",
-          "LTA Application ID": null,
-          "Application Quantum (MW)(ST II)": null,
-          "Nature of Applicant": "Drawee entity connected to Intra State Transmission System",
-          "Mode(Criteria for applying)": null,
-          "Applied Start of Connectivity sought by developer date": "01.06.2024",
-          "Application/Submission Date": "03.05.2024"
+          "page_number": 5,
+          "rows_found": 1,
+          "rows": [
+            {
+              "Project Location": null,
+              "State": null,
+              "substaion": null,
+              "Name of the developers": "Panipat Green Hydrogen Pvt. Ltd.",
+              "GNA/ST II Application ID": "99",
+              "LTA Application ID": null,
+              "Application ID under Enhancement 5.2 or revision": null,
+              "Application Quantum (MW)(ST II)": null,
+              "Nature of Applicant": "Private Limited",
+              "Mode(Criteria for applying)": null,
+              "Applied Start of Connectivity sought by developer date": null,
+              "Application/Submission Date": "25.10.2025"
+            }
+          ]
         },
         {
-          "Project Location": null,
-          "State": null,
-          "substaion": null,
-          "Name of the developers": "Ambuja Cements",
-          "GNA/ST II Application ID": "2200000739",
-          "LTA Application ID": null,
-          "Application Quantum (MW)(ST II)": null,
-          "Nature of Applicant": "Drawee entity connected to Intra",
-          "Mode(Criteria for applying)": null,
-          "Applied Start of Connectivity sought by developer date": "03.05.2024",
-          "Application/Submission Date": "30.06.2025"
-        }
-      ]
-    },
-    {
-      "page_number": 9,
-      "rows_found": 2,
-      "rows": [
-        {
-          "Project Location": null,
-          "State": null,
-          "substaion": null,
-          "Name of the developers": "ACC Limited",
-          "GNA/ST II Application ID": "2200000772",
-          "LTA Application ID": null,
-          "Application Quantum (MW)(ST II)": null,
-          "Nature of Applicant": null,
-          "Mode(Criteria for applying)": null,
-          "Applied Start of Connectivity sought by developer date": null,
-          "Application/Submission Date": "07.05.2024"
+          "page_number": 6,
+          "rows_found": 0,
+          "rows": []
         },
         {
-          "Project Location": null,
-          "State": null,
-          "substaion": null,
-          "Name of the developers": "Ambuja Cements Limited",
-          "GNA/ST II Application ID": "00000740",
-          "LTA Application ID": null,
-          "Application Quantum (MW)(ST II)": "25",
-          "Nature of Applicant": "Drawee entity connected to Intra State Transmission System",
-          "Mode(Criteria for applying)": null,
-          "Applied Start of Connectivity sought by developer date": "01.06.2024",
-          "Application/Submission Date": "03.05.2024"
-        }
-      ]
-    },
-    {
-      "page_number": 10,
-      "rows_found": 4,
-      "rows": [
-        {
-          "Project Location": null,
-          "State": null,
-          "substaion": null,
-          "Name of the developers": "Ambuja Cements Limited",
-          "GNA/ST II Application ID": "0000739",
-          "LTA Application ID": null,
-          "Application Quantum (MW)(ST II)": "7",
-          "Nature of Applicant": "Drawee entity connected to Intra State Transmission System",
-          "Mode(Criteria for applying)": null,
-          "Applied Start of Connectivity sought by developer date": "01.06.2024",
-          "Application/Submission Date": "03.05.2024"
+          "page_number": 7,
+          "rows_found": 0,
+          "rows": []
         },
         {
-          "Project Location": null,
-          "State": null,
-          "substaion": null,
-          "Name of the developers": "Ambuja Cements Limited",
-          "GNA/ST II Application ID": "2210000770",
-          "LTA Application ID": null,
-          "Application Quantum (MW)(ST II)": null,
-          "Nature of Applicant": "Drawee entity connected to Intra State Transmission System",
-          "Mode(Criteria for applying)": null,
-          "Applied Start of Connectivity sought by developer date": "01.09.2024",
-          "Application/Submission Date": "07.05.2024"
+          "page_number": 8,
+          "rows_found": 0,
+          "rows": []
         },
         {
-          "Project Location": null,
-          "State": null,
-          "substaion": "Chamakri",
-          "Name of the developers": "Ambuja Cements Limited",
-          "GNA/ST II Application ID": "22100000770",
-          "LTA Application ID": null,
-          "Application Quantum (MW)(ST II)": "15",
-          "Nature of Applicant": "Drawee entity",
-          "Mode(Criteria for applying)": null,
-          "Applied Start of Connectivity sought by developer date": "01.09.2024",
-          "Application/Submission Date": "07.05.2024"
+          "page_number": 9,
+          "rows_found": 1,
+          "rows": [
+            {
+              "Project Location": null,
+              "State": null,
+              "substaion": "Mainpuri (PG)",
+              "Name of the developers": "Indian Railways",
+              "GNA/ST II Application ID": "2200002494",
+              "LTA Application ID": null,
+              "Application ID under Enhancement 5.2 or revision": null,
+              "Application Quantum (MW)(ST II)": "50",
+              "Nature of Applicant": "Bulk consumer seeking to connect to ISTS directly",
+              "Mode(Criteria for applying)": null,
+              "Applied Start of Connectivity sought by developer date": "01.12.2025",
+              "Application/Submission Date": "13.10.2025"
+            }
+          ]
         },
         {
-          "Project Location": null,
-          "State": null,
-          "substaion": "220 kV Kangoo Substation",
-          "Name of the developers": "Ambuja Cements Limited",
-          "GNA/ST II Application ID": "0000768",
-          "LTA Application ID": null,
-          "Application Quantum (MW)(ST II)": "8.5",
-          "Nature of Applicant": "Drawee entity connected to Intra State Transmission System",
-          "Mode(Criteria for applying)": null,
-          "Applied Start of Connectivity sought by developer date": "01.09.2024",
-          "Application/Submission Date": "07.05.2024"
+          "page_number": 10,
+          "rows_found": 0,
+          "rows": []
         }
       ]
     }

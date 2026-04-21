@@ -451,8 +451,11 @@ def extract_pages(pdf_path: str) -> list[dict]:
     pages = []
     with pdfplumber.open(pdf_path) as pdf:
         total = len(pdf.pages)
-        limit = min(MAX_PAGES, total)
-        print(f"\n[Layer 1] PDF → {total} pages total. Processing first {limit}.\n")
+        limit = total if MAX_PAGES == -1 else min(MAX_PAGES, total)
+        if MAX_PAGES == -1:
+            print(f"\n[Layer 1] PDF → {total} pages total. Processing all pages.\n")
+        else:
+            print(f"\n[Layer 1] PDF → {total} pages total. Processing first {limit}.\n")
         for i in range(limit):
             text = pdf.pages[i].extract_text() or ""
             pages.append({"page_number": i + 1, "text": text})
