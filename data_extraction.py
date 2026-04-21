@@ -36,12 +36,19 @@ def extract_json_payload(text: str) -> dict:
 def extract_rows_from_chunk(
     chunk: str,
     active_fields: list[str],
+    previous_chunk: str,
+    last_extracted_row: str,
     vm_mode: bool,
     api_key: Optional[str],
     llm_script_path: Optional[str],
 ) -> list[dict]:
     try:
-        prompt_payload = build_prompt_payload(chunk, active_fields)
+        prompt_payload = build_prompt_payload(
+            chunk,
+            active_fields,
+            previous_chunk=previous_chunk,
+            last_extracted_row=last_extracted_row,
+        )
         response_json = call_llm(
             prompt_payload=prompt_payload,
             vm=vm_mode,
@@ -62,6 +69,8 @@ def extract_rows_with_fallback(
     chunk: str,
     active_fields: list[str],
     fallback_splitter: RecursiveCharacterTextSplitter,
+    previous_chunk: str,
+    last_extracted_row: str,
     vm_mode: bool,
     api_key: Optional[str],
     llm_script_path: Optional[str],
@@ -70,6 +79,8 @@ def extract_rows_with_fallback(
     primary_rows = extract_rows_from_chunk(
         chunk,
         active_fields,
+        previous_chunk=previous_chunk,
+        last_extracted_row=last_extracted_row,
         vm_mode=vm_mode,
         api_key=api_key,
         llm_script_path=llm_script_path,
@@ -78,15 +89,19 @@ def extract_rows_with_fallback(
         return primary_rows
 
     fallback_rows: list[dict] = []
+    rolling_last_row = last_extracted_row
     for sub_chunk in fallback_splitter.split_text(chunk):
-        fallback_rows.extend(
-            extract_rows_from_chunk(
-                sub_chunk,
-                active_fields,
-                vm_mode=vm_mode,
-                api_key=api_key,
-                llm_script_path=llm_script_path,
-            )
+        sub_rows = extract_rows_from_chunk(
+            sub_chunk,
+            active_fields,
+            previous_chunk=previous_chunk,
+            last_extracted_row=rolling_last_row,
+            vm_mode=vm_mode,
+            api_key=api_key,
+            llm_script_path=llm_script_path,
         )
+        fallback_rows.extend(sub_rows)
+        if sub_rows:
+            rolling_last_row = json.dumps(sub_rows[-1], ensure_ascii=False)
 
     return fallback_rows

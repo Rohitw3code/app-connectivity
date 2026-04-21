@@ -574,6 +574,8 @@ def normalize_rows(rows: list[MappedRow]) -> list[MappedRow]:
         payload["GNA/ST II Application ID"] = _normalize_numeric_id_list(
             raw_gna, strip_leading_zeros=False
         )
+        if not _clean_value(payload.get("GNA/ST II Application ID")):
+            continue
         payload["LTA Application ID"] = _normalize_numeric_id_list(
             raw_lta, strip_leading_zeros=True
         )
@@ -619,6 +621,9 @@ def validate_rows(raw_rows: list[dict]) -> list[MappedRow]:
     validated = []
     for row in raw_rows:
         try:
+            gna_raw = _clean_value(row.get("GNA/ST II Application ID"))
+            if not gna_raw:
+                continue
             validated.append(MappedRow.model_validate(row))
         except Exception as e:
             print(f"      [Pydantic skip] {e}")
@@ -686,12 +691,15 @@ def run_pipeline(
 
         # ── Layer 3: Chunk gate → extraction → normalize ──────
         all_raw = []
+        previous_chunk_text = ""
+        last_extracted_row_json = ""
 
         print(f"  [Layer 3] {len(chunks)} chunk(s) scanned with regex gate")
         for idx, chunk in enumerate(chunks):
             chunk_ok, chunk_hits = check_chunk_for_variants(chunk)
             if not chunk_ok:
                 print(f"    Chunk {idx+1}/{len(chunks)} ({len(chunk)} chars) … skipped (no variants)")
+                previous_chunk_text = chunk
                 continue
 
             active_fields = [name for name, ok in chunk_hits.items() if ok]
@@ -704,12 +712,17 @@ def run_pipeline(
                 chunk,
                 active_fields,
                 fallback_splitter,
+                previous_chunk=previous_chunk_text,
+                last_extracted_row=last_extracted_row_json,
                 vm_mode=vm_mode,
                 api_key=api_key,
                 llm_script_path=llm_script_path,
             )
             print(f" → {len(raw)} row(s)")
             all_raw.extend(raw)
+            if raw:
+                last_extracted_row_json = json.dumps(raw[-1], ensure_ascii=False)
+            previous_chunk_text = chunk
 
         all_raw = deduplicate(all_raw)
         validated = validate_rows(all_raw)

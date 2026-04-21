@@ -5,7 +5,7 @@ from typing import Any
 
 SYSTEM_PROMPT = """\
 You are a precise data extraction assistant.
-You will receive a TEXT CHUNK from a PDF page and a list of column labels detected in this chunk.
+You will receive a CURRENT TEXT CHUNK, PREVIOUS CHUNK context, and LAST EXTRACTED ROW context from the pipeline.
 
 Extract table data and return ONLY these output keys:
 1) Project Location
@@ -60,6 +60,10 @@ Extraction rules:
 - Keep values as strings exactly as seen (except LTA leading-zero cleanup is done later).
 - Ignore headers, footnotes, and explanatory paragraphs.
 - "Name of the developers" must be the applicant/developer company name, not criterion values like "SECI LOA" or "SJVN LOA".
+- PRIMARY KEY RULE: "GNA/ST II Application ID" is mandatory for a valid row. If missing/empty, DO NOT output that row.
+- Use previous chunk and last extracted row context only to avoid duplicates and continue split rows across chunk boundaries.
+- Do not repeat the same row already present in LAST EXTRACTED ROW context.
+- Focus only on rows that are visibly present in CURRENT CHUNK text.
 - For "GNA Operationalization Date" look in description text around terms like SCoD/SCOD and in the last line.
 - For "GNA Operationalization (Yes/No)", prefer null when uncertain since it is computed after extraction.
 - For "Status of application(Withdrawn / granted. Revoked.)" map close words to one of: Withdrawn / granted / Revoked.
@@ -94,12 +98,19 @@ Return JSON only in this exact shape:
 If there is no data row in the chunk: {{"rows": []}}
 """
 
-USER_TEMPLATE = "Detected column labels in this chunk: {active_fields}\n\nChunk text:\n{chunk}"
+USER_TEMPLATE = (
+    "Detected column labels in this chunk: {active_fields}\n\n"
+    "Previous chunk context (may be empty):\n{previous_chunk}\n\n"
+    "Last extracted row context (may be empty):\n{last_extracted_row}\n\n"
+    "Current chunk text:\n{chunk}"
+)
 
 
 def build_prompt_payload(
     chunk: str,
     active_fields: list[str],
+    previous_chunk: str = "",
+    last_extracted_row: str = "",
     *,
     temperature: float = 0,
     max_tokens: int = 2000,
@@ -111,6 +122,8 @@ def build_prompt_payload(
                 "role": "user",
                 "content": USER_TEMPLATE.format(
                     active_fields=", ".join(active_fields),
+                    previous_chunk=previous_chunk or "",
+                    last_extracted_row=last_extracted_row or "",
                     chunk=chunk,
                 ),
             },
