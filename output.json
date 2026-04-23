@@ -1,56 +1,52 @@
 {
   "pdfs_processed": 1,
   "total_pages_extracted": 10,
-  "total_pages_passed_gate": 7,
-  "total_pages_skipped": 3,
+  "total_pages_passed_gate": 8,
+  "total_pages_skipped": 2,
   "total_rows": 3,
   "results": [
     {
       "pdf_path": "/home/bittu/Desktop/App-connectivity/start/source_1/177185140447Minutes of 43rd CMETS NR meeting held on 12.01.2026_F.pdf",
       "total_pages_extracted": 10,
-      "pages_passed_gate": 7,
-      "pages_skipped": 3,
+      "pages_passed_gate": 8,
+      "pages_skipped": 2,
       "total_rows": 3,
       "results": [
+        {
+          "page_number": 2,
+          "rows_found": 0,
+          "rows": []
+        },
         {
           "page_number": 4,
           "rows_found": 1,
           "rows": [
             {
-              "Project Location": "bulandshahr distt, uttar pradesh",
-              "State": "uttar pradesh",
-              "substaion": "Aligarh (PG)",
-              "Name of the developers": "THDC India Limited",
-              "GNA/ST II Application ID": "2200001981",
-              "LTA Application ID": null,
-              "Application ID under Enhancement 5.2 or revision": null,
-              "Application Quantum (MW)(ST II)": "11",
-              "Nature of Applicant": "Generator (Solar)",
-              "Mode(Criteria for applying)": "REGS",
+              "PSP Drawl (MW)": null,
+              "PSP Injection (MW)": null,
+              "PSP MWh": null,
+              "Status of application(Withdrawn / granted. Revoked.)": null,
+              "GNA Operationalization (Yes/No)": null,
+              "GNA Operationalization Date": null,
+              "Application/Submission Date": "28.04.2025",
               "Applied Start of Connectivity sought by developer date": "15.06.2025",
-              "Application/Submission Date": "28.04.2025"
+              "Mode(Criteria for applying)": "REGS",
+              "Nature of Applicant": "Generator (Solar)",
+              "Application Quantum (MW)(ST II)": "11",
+              "Application ID under Enhancement 5.2 or revision": null,
+              "LTA Application ID": null,
+              "GNA/ST II Application ID": "2200001981",
+              "Name of the developers": "THDC India Limited",
+              "substaion": "Aligarh (PG)",
+              "State": "uttar pradesh",
+              "Project Location": "Bulandshahr distt, Uttar Pradesh"
             }
           ]
         },
         {
           "page_number": 5,
-          "rows_found": 1,
-          "rows": [
-            {
-              "Project Location": null,
-              "State": null,
-              "substaion": null,
-              "Name of the developers": "Panipat Green Hydrogen Pvt. Ltd.",
-              "GNA/ST II Application ID": "99",
-              "LTA Application ID": null,
-              "Application ID under Enhancement 5.2 or revision": null,
-              "Application Quantum (MW)(ST II)": null,
-              "Nature of Applicant": "Private Limited",
-              "Mode(Criteria for applying)": null,
-              "Applied Start of Connectivity sought by developer date": null,
-              "Application/Submission Date": "25.10.2025"
-            }
-          ]
+          "rows_found": 0,
+          "rows": []
         },
         {
           "page_number": 6,
@@ -59,8 +55,29 @@
         },
         {
           "page_number": 7,
-          "rows_found": 0,
-          "rows": []
+          "rows_found": 1,
+          "rows": [
+            {
+              "PSP Drawl (MW)": null,
+              "PSP Injection (MW)": null,
+              "PSP MWh": null,
+              "Status of application(Withdrawn / granted. Revoked.)": "Revoked",
+              "GNA Operationalization (Yes/No)": null,
+              "GNA Operationalization Date": null,
+              "Application/Submission Date": "14-08-2025",
+              "Applied Start of Connectivity sought by developer date": "01.12.2025",
+              "Mode(Criteria for applying)": null,
+              "Nature of Applicant": "Generator (Solar)",
+              "Application Quantum (MW)(ST II)": "190",
+              "Application ID under Enhancement 5.2 or revision": null,
+              "LTA Application ID": "1200003829",
+              "GNA/ST II Application ID": "1200003683",
+              "Name of the developers": "ACME Solar Holdings Limited",
+              "substaion": "Bikaner-II PS",
+              "State": null,
+              "Project Location": "Bikaner distt."
+            }
+          ]
         },
         {
           "page_number": 8,
@@ -72,18 +89,24 @@
           "rows_found": 1,
           "rows": [
             {
-              "Project Location": null,
-              "State": null,
-              "substaion": "Mainpuri (PG)",
-              "Name of the developers": "Indian Railways",
-              "GNA/ST II Application ID": "2200002494",
-              "LTA Application ID": null,
-              "Application ID under Enhancement 5.2 or revision": null,
-              "Application Quantum (MW)(ST II)": "50",
-              "Nature of Applicant": "Bulk consumer seeking to connect to ISTS directly",
-              "Mode(Criteria for applying)": null,
+              "PSP Drawl (MW)": null,
+              "PSP Injection (MW)": null,
+              "PSP MWh": null,
+              "Status of application(Withdrawn / granted. Revoked.)": null,
+              "GNA Operationalization (Yes/No)": null,
+              "GNA Operationalization Date": null,
+              "Application/Submission Date": "13.10.2025",
               "Applied Start of Connectivity sought by developer date": "01.12.2025",
-              "Application/Submission Date": "13.10.2025"
+              "Mode(Criteria for applying)": null,
+              "Nature of Applicant": "Bulk consumer seeking to connect to ISTS directly",
+              "Application Quantum (MW)(ST II)": "50",
+              "Application ID under Enhancement 5.2 or revision": null,
+              "LTA Application ID": null,
+              "GNA/ST II Application ID": "2200002494",
+              "Name of the developers": "Indian Railways",
+              "substaion": "Mainpuri (PG)",
+              "State": null,
+              "Project Location": "Mainpuri (PG)"
             }
           ]
         },

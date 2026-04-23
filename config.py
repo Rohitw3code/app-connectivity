@@ -22,7 +22,7 @@ DEFAULT_PAGE_CHUNK_OVERLAP = 180
 # Single switch for runtime mode:
 #   "laptop" -> direct OpenAI API key mode
 #   "vm"     -> script-based VM mode
-EXECUTION_TARGET = "vm"
+EXECUTION_TARGET = "laptop"
 
 
 @dataclass(frozen=True)
