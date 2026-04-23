@@ -1,12 +1,12 @@
 """
 PDF Table Extraction Pipeline
 ==============================
-Layer 1 : pdfplumber  — extract first 10 pages
-Layer 2 : Regex gate  — detect required column headers; skip page if absent
-Layer 3 : LangChain + GPT-4o-mini + Pydantic — chunk each page, extract rows
+Layer 1 : pdfplumber  — extract pages (up to MAX_PAGES)
+Layer 2 : Regex gate  — detect required column headers on the full page; skip if absent
+Layer 3 : LangChain + GPT-4o-mini + Pydantic — each page is ONE chunk; extract ALL rows
 
 Usage:
-    python pdf_pipeline.py --pdf test.pdf --api-key sk-...
+    python extractor.py --pdf test.pdf --api-key sk-...
     (or set OPENAI_API_KEY env variable)
     Set VM=true to use llm_client.bat path instead of direct OpenAI API.
 """
@@ -21,10 +21,9 @@ from typing import Optional
 
 import pdfplumber
 from pydantic import BaseModel, ConfigDict, Field
-from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-from config import CHUNK_OVERLAP, CHUNK_SIZE, MAX_PAGES
-from data_extraction import extract_rows_with_fallback
+from config import MAX_PAGES
+from data_extraction import extract_rows_from_page
 
 # ──────────────────────────────────────────────────────────────
 # LAYER 2 — REGEX VARIANT GATE
@@ -110,14 +109,6 @@ def _contains_any_variant(text: str, variants: list[list[str]]) -> bool:
 def check_page_for_variants(text: str) -> tuple[bool, dict[str, bool]]:
     hits = {
         col: _contains_any_variant(text, variants)
-        for col, variants in TARGET_COLUMN_VARIANTS.items()
-    }
-    return any(hits.values()), hits
-
-
-def check_chunk_for_variants(chunk: str) -> tuple[bool, dict[str, bool]]:
-    hits = {
-        col: _contains_any_variant(chunk, variants)
         for col, variants in TARGET_COLUMN_VARIANTS.items()
     }
     return any(hits.values()), hits
@@ -226,6 +217,7 @@ class MappedRow(
 ):
     model_config = ConfigDict(populate_by_name=True)
 
+
 class PageResult(BaseModel):
     page_number:  int
     rows_found:   int
@@ -241,96 +233,11 @@ class PipelineResult(BaseModel):
     results:               list[PageResult]
 
 
-def build_splitter() -> RecursiveCharacterTextSplitter:
-    return RecursiveCharacterTextSplitter(
-        chunk_size=CHUNK_SIZE,
-        chunk_overlap=CHUNK_OVERLAP,
-        separators=["\n\n", "\n", " ", ""],  # prefer splitting on blank lines first
-    )
-
-
-def split_page_into_fixed_chunks(
-    text: str,
-    num_chunks: int = 4,
-    overlap_chars: int = 180,
-) -> list[dict]:
-    """Split a page into exactly num_chunks chunks with explicit overlap metadata."""
-    src = text or ""
-    if num_chunks <= 0:
-        return [{"chunk_index": 1, "start": 0, "end": len(src), "char_length": len(src), "text": src}]
-
-    if not src:
-        return [
-            {
-                "chunk_index": i + 1,
-                "start": 0,
-                "end": 0,
-                "char_length": 0,
-                "text": "",
-                "overlap_with_previous": 0,
-            }
-            for i in range(num_chunks)
-        ]
-
-    n = len(src)
-    chunk_size = max(1, (n + num_chunks - 1) // num_chunks)
-    chunks: list[dict] = []
-
-    for i in range(num_chunks):
-        nominal_start = i * chunk_size
-        nominal_end = n if i == num_chunks - 1 else min(n, (i + 1) * chunk_size)
-
-        start = max(0, nominal_start - (overlap_chars if i > 0 else 0))
-        end = min(n, nominal_end + (overlap_chars if i < num_chunks - 1 else 0))
-
-        if chunks and start >= chunks[-1]["end"]:
-            # Ensure adjacent chunks overlap by at least one char.
-            start = max(0, chunks[-1]["end"] - 1)
-
-        chunk_text = src[start:end].strip()
-        chunks.append(
-            {
-                "chunk_index": i + 1,
-                "start": start,
-                "end": end,
-                "char_length": len(chunk_text),
-                "text": chunk_text,
-            }
-        )
-
-    for i, chunk in enumerate(chunks):
-        if i == 0:
-            chunk["overlap_with_previous"] = 0
-        else:
-            prev = chunks[i - 1]
-            chunk["overlap_with_previous"] = max(0, prev["end"] - chunk["start"])
-
-    return chunks
-
-def build_fallback_splitter() -> RecursiveCharacterTextSplitter:
-    return RecursiveCharacterTextSplitter(
-        chunk_size=900,
-        chunk_overlap=150,
-        separators=["\n\n", "\n", " ", ""],
-    )
-
-
-def save_page_chunks(chunks_dir: Path, pdf_path: str, page_number: int, chunks: list[dict]) -> None:
-    chunks_dir.mkdir(parents=True, exist_ok=True)
-    pdf_stem = Path(pdf_path).stem
-    chunk_file = chunks_dir / f"{pdf_stem}_page_{page_number}.json"
-    payload = {
-        "pdf": str(pdf_path),
-        "page_number": page_number,
-        "chunks_count": len(chunks),
-        "chunks": chunks,
-    }
-    with open(chunk_file, "w", encoding="utf-8") as fp:
-        json.dump(payload, fp, indent=2, ensure_ascii=False)
-
-
+# ──────────────────────────────────────────────────────────────
+# DEDUPLICATION & NORMALIZATION HELPERS
+# ──────────────────────────────────────────────────────────────
 def deduplicate(rows: list[dict]) -> list[dict]:
-    """Remove overlap duplicates using stable keys and fallback fingerprint."""
+    """Remove duplicate rows using stable keys and fallback fingerprint."""
     seen, unique = set(), []
     for row in rows:
         gna = str(row.get("GNA/ST II Application ID") or "").strip()
@@ -439,18 +346,14 @@ def _derive_enhancement_application_id(
     gna_ids = _extract_numeric_ids(gna_value)
     lta_ids = _extract_numeric_ids(lta_value)
 
-    # Prefer explicit enhancement/application-id column values for regulation 5.2 rows.
     candidate = _pick_gna_preferred_id(enhancement_ids, prefer_stage_ii=stage_ii_context)
     if candidate:
         return candidate
 
-    # Fallback to GNA/ST-II column.
     candidate = _pick_gna_preferred_id(gna_ids, prefer_stage_ii=stage_ii_context)
     if candidate:
         return candidate
 
-    # Last fallback from App. No. & Conn. Quantum (already granted):
-    # if single ID starts with 04 treat as LTA (skip); else treat as GNA.
     if len(lta_ids) == 1:
         only = lta_ids[0]
         return None if _is_lta_id(only) else only
@@ -517,7 +420,6 @@ def _extract_psp_subcolumns(*values: Optional[str]) -> tuple[Optional[str], Opti
     if not re.search(r"\b(pump\s*storage|psp)\b", text, flags=re.IGNORECASE):
         return None, None, None
 
-    # MWh (or first total number near "for <num> MW/MWh")
     mwh = None
     mwh_match = re.search(r"for\s+(\d+(?:\.\d+)?)\s*(?:MWh|MW)", text, flags=re.IGNORECASE)
     if mwh_match:
@@ -654,13 +556,9 @@ def extract_pages(pdf_path: str) -> list[dict]:
 def run_pipeline(
     pdf_path: str,
     api_key: Optional[str],
-    chunks_dir: Path,
-    chunks_per_page: int = 4,
-    page_chunk_overlap_chars: int = 180,
     vm_mode: bool = False,
     llm_script_path: Optional[str] = None,
 ) -> PipelineResult:
-    fallback_splitter = build_fallback_splitter()
 
     pages = extract_pages(pdf_path)
     results = []
@@ -670,62 +568,31 @@ def run_pipeline(
     for page in pages:
         pnum = page["page_number"]
         text = page["text"]
-        chunk_entries = split_page_into_fixed_chunks(
-            text,
-            num_chunks=chunks_per_page,
-            overlap_chars=page_chunk_overlap_chars,
-        )
-        save_page_chunks(chunks_dir, pdf_path, pnum, chunk_entries)
-        chunks = [entry.get("text", "") for entry in chunk_entries]
 
-        # ── Layer 2: Page gate ─────────────────────────────────
+        # ── Layer 2: Page regex gate ───────────────────────────
         passed, page_hits = check_page_for_variants(text)
         if not passed:
             print(f"[Layer 2] Page {pnum:>3}: SKIP  — no target column variants found")
             pages_skipped += 1
             continue
 
-        page_fields = [name for name, ok in page_hits.items() if ok]
-        print(f"[Layer 2] Page {pnum:>3}: PASS ✓ — found variants for: {page_fields}")
+        active_fields = [name for name, ok in page_hits.items() if ok]
+        print(f"[Layer 2] Page {pnum:>3}: PASS ✓ — found variants for: {active_fields}")
         pages_passed += 1
 
-        # ── Layer 3: Chunk gate → extraction → normalize ──────
-        all_raw = []
-        previous_chunk_text = ""
-        last_extracted_row_json = ""
+        # ── Layer 3: Full page → LLM → multiple rows ──────────
+        print(f"  [Layer 3] Page {pnum} ({len(text)} chars) → sending full page to LLM …", end="", flush=True)
+        raw_rows = extract_rows_from_page(
+            page_text=text,
+            active_fields=active_fields,
+            vm_mode=vm_mode,
+            api_key=api_key,
+            llm_script_path=llm_script_path,
+        )
+        print(f" → {len(raw_rows)} raw row(s)")
 
-        print(f"  [Layer 3] {len(chunks)} chunk(s) scanned with regex gate")
-        for idx, chunk in enumerate(chunks):
-            chunk_ok, chunk_hits = check_chunk_for_variants(chunk)
-            if not chunk_ok:
-                print(f"    Chunk {idx+1}/{len(chunks)} ({len(chunk)} chars) … skipped (no variants)")
-                previous_chunk_text = chunk
-                continue
-
-            active_fields = [name for name, ok in chunk_hits.items() if ok]
-            print(
-                f"    Chunk {idx+1}/{len(chunks)} ({len(chunk)} chars) … extracting for {active_fields}",
-                end="",
-                flush=True,
-            )
-            raw = extract_rows_with_fallback(
-                chunk,
-                active_fields,
-                fallback_splitter,
-                previous_chunk=previous_chunk_text,
-                last_extracted_row=last_extracted_row_json,
-                vm_mode=vm_mode,
-                api_key=api_key,
-                llm_script_path=llm_script_path,
-            )
-            print(f" → {len(raw)} row(s)")
-            all_raw.extend(raw)
-            if raw:
-                last_extracted_row_json = json.dumps(raw[-1], ensure_ascii=False)
-            previous_chunk_text = chunk
-
-        all_raw = deduplicate(all_raw)
-        validated = validate_rows(all_raw)
+        raw_rows = deduplicate(raw_rows)
+        validated = validate_rows(raw_rows)
         normalized = normalize_rows(validated)
 
         print(f"  → {len(normalized)} unique normalized row(s) on page {pnum}\n")

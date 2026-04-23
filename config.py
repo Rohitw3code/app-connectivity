@@ -13,11 +13,7 @@ from dotenv import load_dotenv
 #   > 0  -> process first N pages per PDF
 #   = -1 -> process all pages per PDF
 MAX_PAGES = 10
-CHUNK_SIZE = 1800
-CHUNK_OVERLAP = 300
 MODEL = "gpt-4o-mini"
-DEFAULT_CHUNKS_PER_PAGE = 4
-DEFAULT_PAGE_CHUNK_OVERLAP = 180
 
 # Single switch for runtime mode:
 #   "laptop" -> direct OpenAI API key mode

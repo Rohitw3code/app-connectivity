@@ -6,7 +6,7 @@ from pathlib import Path
 from datetime import datetime
 from time import perf_counter
 
-from config import DEFAULT_CHUNKS_PER_PAGE, DEFAULT_PAGE_CHUNK_OVERLAP, load_runtime_config
+from config import load_runtime_config
 from excel_export import export_results_to_excel
 from extractor import PipelineResult, run_pipeline
 
@@ -43,9 +43,6 @@ def main() -> None:
 
     parser.add_argument("--output", default="output.json", help="Output JSON file")
     parser.add_argument("--excel-output", default="output.xlsx", help="Output Excel file")
-    parser.add_argument("--chunks-dir", default="page_chunks", help="Folder to save per-page chunk JSON files")
-    parser.add_argument("--chunks-per-page", type=int, default=DEFAULT_CHUNKS_PER_PAGE, help="Number of chunks to split each page into")
-    parser.add_argument("--page-chunk-overlap", type=int, default=DEFAULT_PAGE_CHUNK_OVERLAP, help="Character overlap between adjacent page chunks")
     args = parser.parse_args()
 
     runtime = load_runtime_config(
@@ -64,7 +61,6 @@ def main() -> None:
     print(f"Execution target : {runtime.execution_target}")
     print(f"VM mode          : {runtime.vm_mode}")
 
-    chunks_dir = Path(args.chunks_dir).resolve()
     all_results: list[PipelineResult] = []
     for idx, pdf_path in enumerate(pdf_paths, start=1):
         print("-" * 64)
@@ -72,9 +68,6 @@ def main() -> None:
         result = run_pipeline(
             pdf_path=str(pdf_path),
             api_key=runtime.api_key or None,
-            chunks_dir=chunks_dir,
-            chunks_per_page=args.chunks_per_page,
-            page_chunk_overlap_chars=max(0, args.page_chunk_overlap),
             vm_mode=runtime.vm_mode,
             llm_script_path=runtime.llm_script_path,
         )
@@ -116,7 +109,6 @@ def main() -> None:
 
     print(f"\nOutput saved → {args.output}")
     print(f"Excel saved  → {excel_path}")
-    print(f"Chunk files saved → {chunks_dir}")
     print(f"Runtime (s) → {runtime_seconds:.2f}")
 
     if all_results and all_results[0].results:
