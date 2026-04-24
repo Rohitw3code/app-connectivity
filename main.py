@@ -9,6 +9,7 @@ from time import perf_counter
 from config import load_runtime_config
 from excel_export import export_results_to_excel
 from extractor import PipelineResult, run_pipeline
+from effectiveness import process_all_effectiveness_pdfs, merge_effectiveness_into_final
 
 
 def _resolve_pdf_paths(source_dir: str, pdf: str | None) -> list[Path]:
@@ -43,6 +44,7 @@ def main() -> None:
 
     parser.add_argument("--output", default="output.json", help="Output JSON file")
     parser.add_argument("--excel-output", default="output.xlsx", help="Output Excel file")
+    parser.add_argument("--skip-effectiveness", action="store_true", help="Skip effectiveness extraction & merge step")
     args = parser.parse_args()
 
     runtime = load_runtime_config(
@@ -116,6 +118,26 @@ def main() -> None:
         print(f"\nPreview — Page {first_page.page_number} (first PDF):")
         for row in first_page.rows[:3]:
             print(json.dumps(row.model_dump(by_alias=True), indent=2, ensure_ascii=False))
+
+    # ── EFFECTIVENESS: Extract + Merge ──────────────────────────
+    if not args.skip_effectiveness:
+        print("\n" + "=" * 64)
+        print("  EFFECTIVENESS EXTRACTION & MERGE")
+        print("=" * 64)
+        try:
+            eff_df = process_all_effectiveness_pdfs()
+            if not eff_df.empty:
+                merge_effectiveness_into_final(
+                    final_excel_path=str(excel_path),
+                    effectiveness_df=eff_df,
+                    output_excel_path=str(excel_path),
+                )
+            else:
+                print("[Effectiveness] No data extracted — skipping merge.")
+        except Exception as e:
+            print(f"[Effectiveness] Error during extraction/merge: {e}")
+            import traceback
+            traceback.print_exc()
 
 
 if __name__ == "__main__":
