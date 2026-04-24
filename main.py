@@ -110,7 +110,7 @@ def main() -> None:
     )
 
     print(f"\nOutput saved → {args.output}")
-    print(f"Excel saved  → {excel_path}")
+    print(f"Excel saved  → {excel_path}  (intermediate — GNI extraction only)")
     print(f"Runtime (s) → {runtime_seconds:.2f}")
 
     if all_results and all_results[0].results:
@@ -119,21 +119,27 @@ def main() -> None:
         for row in first_page.rows[:3]:
             print(json.dumps(row.model_dump(by_alias=True), indent=2, ensure_ascii=False))
 
-    # ── EFFECTIVENESS: Extract + Merge ──────────────────────────
+    # ── EFFECTIVENESS: Extract + Merge → final_output.xlsx ──────
     if not args.skip_effectiveness:
         print("\n" + "=" * 64)
         print("  EFFECTIVENESS EXTRACTION & MERGE")
         print("=" * 64)
+
+        # Derive final_output path alongside the intermediate excel
+        excel_path_obj = Path(excel_path)
+        final_output_path = str(excel_path_obj.parent / "final_output.xlsx")
+
         try:
             eff_df = process_all_effectiveness_pdfs()
-            if not eff_df.empty:
-                merge_effectiveness_into_final(
-                    final_excel_path=str(excel_path),
-                    effectiveness_df=eff_df,
-                    output_excel_path=str(excel_path),
-                )
-            else:
-                print("[Effectiveness] No data extracted — skipping merge.")
+            # Always attempt merge: even if eff_df is empty (all PDFs already
+            # cached from a previous run), merge_effectiveness_into_final will
+            # load data from disk JSONs via _build_eff_lookup_from_jsons.
+            merged_path = merge_effectiveness_into_final(
+                final_excel_path=str(excel_path),
+                effectiveness_df=eff_df,
+                output_excel_path=final_output_path,
+            )
+            print(f"\n[Pipeline] Final merged output → {merged_path}")
         except Exception as e:
             print(f"[Effectiveness] Error during extraction/merge: {e}")
             import traceback

@@ -436,64 +436,87 @@ def _classify_project_type(type_str: Optional[str]) -> dict:
     return {cat: True for cat in categories}
 
 
+def _build_eff_lookup_from_jsons(
+    output_folder: Path,
+) -> dict[str, dict]:
+    """
+    Build an application_id → record dict by reading ALL JSON files in
+    effectiveness_output/.  This is used as the primary lookup so that
+    even IDs not present in the in-memory DataFrame (e.g. from a
+    previous run) are still matched.
+    """
+    lookup: dict[str, dict] = {}
+    for json_file in sorted(output_folder.glob("*.json")):
+        try:
+            with open(json_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            for item in data:
+                app_id = str(item.get("application_id", "") or "").strip()
+                if app_id:
+                    lookup[app_id] = item   # last-write-wins per id
+        except Exception as e:
+            print(f"  [warn] Could not read {json_file.name}: {e}")
+    return lookup
+
+
 def merge_effectiveness_into_final(
     final_excel_path: str,
     effectiveness_df: pd.DataFrame,
     output_excel_path: str | None = None,
 ) -> str:
     """
-    Read the final GNI output Excel, merge effectiveness data, and save.
+    Read the GNI output Excel (output.xlsx), merge effectiveness data,
+    and write to final_output.xlsx.
 
-    Matching: "GNA/ST II Application ID" (final) ↔ "application_id" (effectiveness)
+    Match strategy (per row in the GNI Excel):
+      1. Primary  : "GNA/ST II Application ID" → look up in effectiveness JSONs
+      2. Fallback : "LTA Application ID"       → look up if primary yields no match
 
-    Updates (only if valid data present in effectiveness):
-      - "Name of developers"               ← "name_of_applicant"
-      - "Substation"                        ← "substation"  (mapped from 'substaion')
-      - "State"                             ← "state"
-      - "Application Quantum (MW)(ST II)"   ← "installed_capacity_mw"
+    Fields updated / added from the matched effectiveness record:
 
-    New columns added:
-      - "Region"                            ← "region"
-      - "type"                              ← "type_of_project"
-      - "Installed capacity (MW) solar"     ← "solar_mw"
-      - "Installed capacity (MW) wind"      ← "wind_mw"
-      - "Installed capacity (MW) ess"       ← "ess_mw"
-      - "Installed capacity (MW) hydro"     ← "hydro_mw"
+    UPDATE existing columns (only when valid data found):
+      - "Name of the developers"            ← name_of_applicant
+      - "substaion" / "Substation"          ← substation
+      - "State"                             ← state
+      - "Application Quantum (MW)(ST II)"   ← installed_capacity_mw
+
+    ADD new columns (created if absent):
+      - "Region"                            ← region
+      - "Type of Project"                   ← type_of_project
+      - "Installed capacity (MW) solar"     ← solar_mw
+      - "Installed capacity (MW) wind"      ← wind_mw
+      - "Installed capacity (MW) ess"       ← ess_mw
+      - "Installed capacity (MW) hydro"     ← hydro_mw
       - "Installed capacity (MW) hybrid"    ← sum of breakdowns when hybrid
     """
     if output_excel_path is None:
         output_excel_path = final_excel_path
 
-    if effectiveness_df.empty:
+    # ── Build the effectiveness lookup ───────────────────────────────────────
+    # 1. Start with what the in-memory DataFrame provides (current run).
+    eff_lookup: dict[str, dict] = {}
+    if not effectiveness_df.empty:
+        for _, row in effectiveness_df.iterrows():
+            app_id = str(row.get("application_id", "") or "").strip()
+            if app_id:
+                eff_lookup[app_id] = row.to_dict()
+
+    # 2. Supplement / override with ALL JSONs on disk (covers previous runs).
+    json_lookup = _build_eff_lookup_from_jsons(EFFECTIVENESS_OUTPUT_FOLDER)
+    # Disk data takes precedence (it is the persisted, authoritative copy).
+    eff_lookup.update(json_lookup)
+
+    if not eff_lookup:
         print("[Merge] No effectiveness data to merge.")
         return final_excel_path
 
-    # Read the final Excel
-    final_df = pd.read_excel(final_excel_path, sheet_name=0)
-    print(f"\n[Merge] Final Excel loaded: {len(final_df)} rows, columns: {list(final_df.columns)}")
-
-    # --- Build lookup from effectiveness_df keyed on application_id ---
-    eff_lookup: dict[str, dict] = {}
-    for _, row in effectiveness_df.iterrows():
-        app_id = str(row.get("application_id", "") or "").strip()
-        if not app_id:
-            continue
-        # Keep latest (last encountered) entry per application_id
-        eff_lookup[app_id] = row.to_dict()
-
     print(f"[Merge] Effectiveness lookup built: {len(eff_lookup)} unique application IDs")
 
-    # --- Identify the GNA column in the final DataFrame ---
-    gna_col = None
-    for col in final_df.columns:
-        if "GNA" in str(col) and "Application" in str(col) and "ID" in str(col):
-            gna_col = col
-            break
-    if gna_col is None:
-        # fallback
-        gna_col = "GNA/ST II Application ID"
+    # ── Read the GNI output Excel ────────────────────────────────────────────
+    final_df = pd.read_excel(final_excel_path, sheet_name=0)
+    print(f"[Merge] GNI Excel loaded: {len(final_df)} rows")
 
-    # --- Determine column names in the final DF (handle variations) ---
+    # ── Identify key columns ─────────────────────────────────────────────────
     def _find_col(df, *candidates):
         for c in candidates:
             for col in df.columns:
@@ -501,47 +524,68 @@ def merge_effectiveness_into_final(
                     return col
         return None
 
-    col_name_dev = _find_col(final_df, "Name of the developers", "Name of developers")
+    gna_col = _find_col(final_df, "GNA/ST II Application ID")
+    lta_col = _find_col(final_df, "LTA Application ID")
+    col_name_dev  = _find_col(final_df, "Name of the developers", "Name of developers")
     col_substation = _find_col(final_df, "substaion", "Substation")
-    col_state = _find_col(final_df, "State")
-    col_quantum = _find_col(final_df, "Application Quantum (MW)(ST II)")
+    col_state     = _find_col(final_df, "State")
+    col_quantum   = _find_col(final_df, "Application Quantum (MW)(ST II)")
 
-    # --- Add new columns ---
-    if "Region" not in final_df.columns:
-        final_df["Region"] = None
-    if "type" not in final_df.columns:
-        final_df["type"] = None
-    for sub_col in [
+    # ── Add new columns if absent ─────────────────────────────────────────────
+    new_cols = [
+        "Region",
+        "Type of Project",
         "Installed capacity (MW) solar",
         "Installed capacity (MW) wind",
         "Installed capacity (MW) ess",
         "Installed capacity (MW) hydro",
         "Installed capacity (MW) hybrid",
-    ]:
-        if sub_col not in final_df.columns:
-            final_df[sub_col] = None
+    ]
+    for nc in new_cols:
+        if nc not in final_df.columns:
+            final_df[nc] = None
 
-    matched_count = 0
+    # ── Helper: extract IDs from a cell value ─────────────────────────────────
+    def _ids_from_cell(cell_val) -> list[str]:
+        raw = str(cell_val or "").strip()
+        if not raw:
+            return []
+        return [x.strip() for x in re.split(r"[,;\s]+", raw) if x.strip()]
+
+    # ── Helper: look up a list of candidate IDs in the lookup ────────────────
+    def _lookup_first(ids: list[str]) -> Optional[dict]:
+        for id_ in ids:
+            if id_ in eff_lookup:
+                return eff_lookup[id_]
+        return None
+
+    # ── Row-by-row merge ─────────────────────────────────────────────────────
+    matched_gna: int = 0
+    matched_lta: int = 0
+    unmatched:   int = 0
+
     for idx, row in final_df.iterrows():
-        gna_ids_raw = str(row.get(gna_col, "") or "").strip()
-        if not gna_ids_raw:
-            continue
+        # 1. Try GNA/ST II Application ID first
+        gna_ids = _ids_from_cell(row.get(gna_col)) if gna_col else []
+        eff_data = _lookup_first(gna_ids)
+        match_via = "GNA"
 
-        # A row may have multiple IDs comma-separated
-        gna_ids = [x.strip() for x in re.split(r"[,;\s]+", gna_ids_raw) if x.strip()]
-
-        eff_data = None
-        for gid in gna_ids:
-            if gid in eff_lookup:
-                eff_data = eff_lookup[gid]
-                break
+        # 2. Fallback to LTA Application ID
+        if eff_data is None and lta_col:
+            lta_ids = _ids_from_cell(row.get(lta_col))
+            eff_data = _lookup_first(lta_ids)
+            match_via = "LTA"
 
         if eff_data is None:
+            unmatched += 1
             continue
 
-        matched_count += 1
+        if match_via == "GNA":
+            matched_gna += 1
+        else:
+            matched_lta += 1
 
-        # --- Update columns (only if valid data in effectiveness) ---
+        # ── Update existing columns ───────────────────────────────────────
         if col_name_dev and _is_valid(eff_data.get("name_of_applicant")):
             final_df.at[idx, col_name_dev] = eff_data["name_of_applicant"]
 
@@ -554,14 +598,13 @@ def merge_effectiveness_into_final(
         if col_quantum and _is_valid(eff_data.get("installed_capacity_mw")):
             final_df.at[idx, col_quantum] = eff_data["installed_capacity_mw"]
 
-        # --- New columns ---
+        # ── New columns ───────────────────────────────────────────────────
         if _is_valid(eff_data.get("region")):
             final_df.at[idx, "Region"] = eff_data["region"]
 
         if _is_valid(eff_data.get("type_of_project")):
-            final_df.at[idx, "type"] = eff_data["type_of_project"]
+            final_df.at[idx, "Type of Project"] = eff_data["type_of_project"]
 
-        # Installed capacity breakdown
         if _is_valid(eff_data.get("solar_mw")):
             final_df.at[idx, "Installed capacity (MW) solar"] = eff_data["solar_mw"]
 
@@ -574,7 +617,7 @@ def merge_effectiveness_into_final(
         if _is_valid(eff_data.get("hydro_mw")):
             final_df.at[idx, "Installed capacity (MW) hydro"] = eff_data["hydro_mw"]
 
-        # Hybrid = total of all breakdowns if type contains hybrid or multiple sources
+        # Hybrid total
         type_proj = eff_data.get("type_of_project", "") or ""
         cats = _classify_project_type(type_proj)
         if cats.get("hybrid"):
@@ -586,15 +629,16 @@ def merge_effectiveness_into_final(
             if hybrid_total > 0:
                 final_df.at[idx, "Installed capacity (MW) hybrid"] = hybrid_total
 
-    print(f"[Merge] Matched & updated: {matched_count} rows out of {len(final_df)}")
+    print(
+        f"[Merge] Matched via GNA: {matched_gna} | via LTA fallback: {matched_lta} "
+        f"| unmatched: {unmatched} | total rows: {len(final_df)}"
+    )
 
-    # --- Save ---
+    # ── Save to final_output.xlsx ─────────────────────────────────────────────
     Path(output_excel_path).parent.mkdir(parents=True, exist_ok=True)
     final_df.to_excel(output_excel_path, index=False, sheet_name="Extracted Data")
-
-    # Apply formatting
     _format_output_excel(output_excel_path)
-    print(f"[Merge] Saved merged output → {output_excel_path}")
+    print(f"[Merge] Saved → {output_excel_path}")
     return output_excel_path
 
 
