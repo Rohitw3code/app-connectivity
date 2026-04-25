@@ -18,7 +18,7 @@ MODEL = "gpt-4o-mini"
 # Single switch for runtime mode:
 #   "laptop" -> direct OpenAI API key mode
 #   "vm"     -> script-based VM mode
-EXECUTION_TARGET = "laptop"
+EXECUTION_TARGET = "vm"   # default: use VM script mode (change to "laptop" for direct API)
 
 
 @dataclass(frozen=True)

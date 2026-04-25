@@ -1,7 +1,11 @@
+"""
+cmets_handler/prompts.py — LLM prompt templates for CMETS extraction
+=====================================================================
+Edit this file to change how the LLM is instructed to extract rows
+from CMETS / GNI connectivity PDF tables.
+"""
+
 from __future__ import annotations
-
-from typing import Any
-
 
 SYSTEM_PROMPT = """\
 You are a precise data extraction assistant specialising in Indian energy/power connectivity applications.
@@ -37,8 +41,7 @@ Column-name mapping rules:
 - GNA/ST II Application ID  <- Application No. & Date OR Application ID
 - LTA Application ID        <- App. No. & Conn. Quantum (MW) of already granted Connectivity
 - Application ID under Enhancement 5.2 or revision
-      <- use only when table/row context mentions Enhancement 5.2 / regulation 5.2 / revision;
-         source from Application No. & Date OR Application ID OR App. No. & Conn. Quantum
+      <- use only when table/row context mentions Enhancement 5.2 / regulation 5.2 / revision
 - Application Quantum (MW)(ST II) <- Installed Capacity (MW) OR Connectivity Quantum (MW)
 - Nature of Applicant       <- Nature of Applicant
 - Mode(Criteria for applying) <- Criterion for applying
@@ -48,33 +51,22 @@ Column-name mapping rules:
 - GNA Operationalization Date <- near SCoD / SCOD in description text
 - GNA Operationalization (Yes/No) <- derived post-processing; return null here
 - Status of application(Withdrawn / granted. Revoked.) <- status wording in description
-- PSP MWh / PSP Injection (MW) / PSP Drawl (MW)
-      <- only when pump storage / PSP wording is present
-
-Rules for "Application ID under Enhancement 5.2 or revision":
-- Populate ONLY when the row indicates enhancement/revision context (e.g. "5.2", "regulation 5.2",
-  "enhancement", "revision"). Otherwise set null.
-- If stage-II/ST-II is mentioned for the ID list, choose the GNA/ST-II application ID (not LTA).
-- In "App. No. & Conn. Quantum (MW) of already granted Connectivity":
-    · if stage-II/ST-II is mentioned → treat that ID as GNA/ST-II, the other as LTA.
-    · if only one ID is present: starts with "04" → LTA; otherwise → GNA/ST-II.
-- For regulation 5.2 rows, prefer Application ID/Application No. & Date for this field.
+- PSP MWh / PSP Injection (MW) / PSP Drawl (MW) <- only when pump storage / PSP is present
 
 Extraction rules (critical):
 - Extract EVERY visible data row on the page — a page often contains multiple rows.
 - Each table row = one object in the "rows" array.
 - Use null if a value is not available in a particular row.
-- Not all columns need to exist in each row; extract what is present.
 - Keep values as strings exactly as seen in the text.
 - Ignore headers, footnotes, and purely explanatory paragraphs.
 - "Name of the developers" must be the company/applicant name, NOT criterion values like "SECI LOA".
 - PRIMARY KEY RULE: "GNA/ST II Application ID" is mandatory. If a row lacks it, DO NOT output it.
-- For "GNA Operationalization Date" look near SCoD/SCOD terms and in description tails.
+- For "GNA Operationalization Date" look near SCoD/SCOD terms.
 - For "GNA Operationalization (Yes/No)" return null (computed in post-processing).
 - For "Status of application..." map wording to: Withdrawn / granted / Revoked.
-- PSP values: fill only when pump storage / PSP wording is explicitly present for that row.
+- PSP values: fill only when pump storage / PSP wording is explicitly present.
 
-Return JSON in EXACTLY this shape (multiple rows are expected and required):
+Return JSON in EXACTLY this shape:
 {{
     "rows": [
         {{
@@ -96,10 +88,6 @@ Return JSON in EXACTLY this shape (multiple rows are expected and required):
             "PSP MWh": null,
             "PSP Injection (MW)": null,
             "PSP Drawl (MW)": null
-        }},
-        {{
-            "Project Location": "...",
-            "GNA/ST II Application ID": "..."
         }}
     ]
 }}
@@ -111,26 +99,3 @@ USER_TEMPLATE = (
     "Detected column labels present on this page: {active_fields}\n\n"
     "Full page text:\n{page_text}"
 )
-
-
-def build_prompt_payload(
-    page_text: str,
-    active_fields: list[str],
-    *,
-    temperature: float = 0,
-    max_tokens: int = 4000,
-) -> dict[str, Any]:
-    return {
-        "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {
-                "role": "user",
-                "content": USER_TEMPLATE.format(
-                    active_fields=", ".join(active_fields),
-                    page_text=page_text,
-                ),
-            },
-        ],
-        "temperature": temperature,
-        "max_tokens": max_tokens,
-    }

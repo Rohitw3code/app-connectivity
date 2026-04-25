@@ -1,149 +1,161 @@
+"""
+main.py — Pipeline Entry Point
+================================
+Run the three-module extraction & mapping pipeline:
+
+    python main.py                        # full run (Modules 1 → 2 → 3)
+    python main.py --skip-effectiveness   # Module 1 only
+    python main.py --pdf path/to/file.pdf # single PDF (Module 1 only)
+    python main.py --mode laptop --api-key sk-...
+
+Default execution mode: vm  (set EXECUTION_TARGET in config.py to change)
+Missing input/output folders are created automatically.
+
+Modules
+-------
+  Module 1 (pipeline/cmets_handler/)         — CMETS PDF extraction
+  Module 2 (pipeline/effectiveness_handler/) — Effectiveness PDF extraction
+  Module 3 (pipeline/mapping_handler/)       — CMETS × Effectiveness merge
+"""
+
 from __future__ import annotations
 
 import argparse
-import json
+import logging
+import traceback
 from pathlib import Path
-from datetime import datetime
-from time import perf_counter
+
+import pandas as pd
 
 from config import load_runtime_config
-from excel_export import export_results_to_excel
-from extractor import PipelineResult, run_pipeline
-from effectiveness import process_all_effectiveness_pdfs, merge_effectiveness_into_final
+from pipeline.cmets_handler         import run_cmets_extraction
+from pipeline.effectiveness_handler import run_effectiveness_extraction
+from pipeline.mapping_handler       import run_mapping
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s  %(levelname)-8s  %(message)s",
+    datefmt="%H:%M:%S",
+)
+
+# ─── Required folders — auto-created on startup ──────────────────────────────
+_START_DIR = Path(__file__).resolve().parent
+_APP_DIR   = _START_DIR.parent
+
+REQUIRED_FOLDERS = [
+    # (path, description)
+    (_START_DIR / "source_1",                               "CMETS PDF input folder"),
+    (_START_DIR / "source_1_output",                        "CMETS JSON cache folder"),
+    (_START_DIR / "effectiveness_output",                   "Effectiveness JSON cache folder"),
+    (_APP_DIR   / "CTUIL-Regenerators-Effective-Date-wise", "Effectiveness PDF input folder"),
+]
 
 
-def _resolve_pdf_paths(source_dir: str, pdf: str | None) -> list[Path]:
-    if pdf:
-        return [Path(pdf).resolve()]
+def _ensure_folders() -> None:
+    """Create all required input/output folders if they don't exist."""
+    for folder, desc in REQUIRED_FOLDERS:
+        if not folder.exists():
+            folder.mkdir(parents=True, exist_ok=True)
+            print(f"  [Created] {folder}  ({desc})")
+        else:
+            print(f"  [OK]      {folder}")
 
-    src_dir = Path(source_dir).resolve()
-    pdfs = sorted(p for p in src_dir.glob("*.pdf") if p.is_file())
-    if not pdfs:
-        raise SystemExit(f"ERROR: No PDF found in {src_dir}. Use --pdf to specify a file.")
-    return pdfs
+
+# ─── CLI ──────────────────────────────────────────────────────────────────────
+
+def _build_args() -> argparse.Namespace:
+    p = argparse.ArgumentParser(
+        description="CMETS / GNI three-module extraction pipeline",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    p.add_argument("--pdf",              default=None, metavar="FILE",
+                   help="Process a single PDF only (Module 1 only)")
+    p.add_argument("--source-dir",       default=None, metavar="DIR",
+                   help="CMETS PDF folder               (default: source_1/)")
+    p.add_argument("--output-dir",       default=None, metavar="DIR",
+                   help="CMETS JSON cache folder        (default: source_1_output/)")
+    p.add_argument("--cmets-excel",      default=None, metavar="FILE",
+                   help="CMETS Excel output             (default: cmets.xlsx)")
+    p.add_argument("--effective-dir",    default=None, metavar="DIR",
+                   help="Effectiveness PDF folder       (default: auto-resolved)")
+    p.add_argument("--eff-output-dir",   default=None, metavar="DIR",
+                   help="Effectiveness JSON cache folder(default: effectiveness_output/)")
+    p.add_argument("--mapped-excel",     default=None, metavar="FILE",
+                   help="Mapped output Excel            (default: effectiveness_mapped.xlsx)")
+    p.add_argument("--skip-effectiveness", action="store_true",
+                   help="Run Module 1 only; skip Modules 2 & 3")
+    p.add_argument("--mode",             choices=["vm", "laptop"], default=None,
+                   help="Override execution mode (default: vm)")
+    p.add_argument("--api-key",          default=None,
+                   help="OpenAI API key (laptop mode override)")
+    p.add_argument("--llm-script",       default=None,
+                   help="Path to llm_client.bat (vm mode override)")
+    return p.parse_args()
 
 
-def _serialize_result(result: PipelineResult) -> dict:
-    output = result.model_dump()
-    for i, page_res in enumerate(output["results"]):
-        page_res["rows"] = [
-            r.model_dump(by_alias=True)
-            for r in result.results[i].rows
-        ]
-    return output
-
+# ─── Main ─────────────────────────────────────────────────────────────────────
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="PDF mapped extraction pipeline")
-    parser.add_argument("--source-dir", default="source_1", help="Folder containing PDF files")
-    parser.add_argument("--pdf", default=None, help="Path to a single PDF file (optional; by default all PDFs in source-dir are processed)")
-
-    parser.add_argument("--mode", choices=["vm", "laptop"], default=None, help="Optional override for config EXECUTION_TARGET")
-    parser.add_argument("--api-key", default=None, help="OpenAI API key override")
-    parser.add_argument("--llm-script", default=None, help="Path to llm_client.bat for VM mode")
-
-    parser.add_argument("--output", default="output.json", help="Output JSON file")
-    parser.add_argument("--excel-output", default="output.xlsx", help="Output Excel file")
-    parser.add_argument("--skip-effectiveness", action="store_true", help="Skip effectiveness extraction & merge step")
-    args = parser.parse_args()
-
+    args    = _build_args()
     runtime = load_runtime_config(
-        mode_override=args.mode,
-        api_key_override=args.api_key,
-        llm_script_override=args.llm_script,
+        mode_override       = args.mode,
+        api_key_override    = args.api_key,
+        llm_script_override = args.llm_script,
     )
-    started_at = datetime.now()
-    run_start = perf_counter()
-    pdf_paths = _resolve_pdf_paths(args.source_dir, args.pdf)
 
+    print("\n" + "=" * 64)
+    print("  CMETS / GNI  EXTRACTION PIPELINE")
     print("=" * 64)
-    print("  PDF MAPPED EXTRACTION PIPELINE")
-    print("=" * 64)
-    print(f"PDFs selected    : {len(pdf_paths)}")
-    print(f"Execution target : {runtime.execution_target}")
-    print(f"VM mode          : {runtime.vm_mode}")
+    print(f"  Mode             : {runtime.execution_target}")
+    print(f"  Skip Module 2+3  : {args.skip_effectiveness}")
+    print("-" * 64)
+    print("  Checking required folders…")
+    _ensure_folders()
+    print("=" * 64 + "\n")
 
-    all_results: list[PipelineResult] = []
-    for idx, pdf_path in enumerate(pdf_paths, start=1):
-        print("-" * 64)
-        print(f"[{idx}/{len(pdf_paths)}] Processing: {pdf_path}")
-        result = run_pipeline(
-            pdf_path=str(pdf_path),
-            api_key=runtime.api_key or None,
-            vm_mode=runtime.vm_mode,
-            llm_script_path=runtime.llm_script_path,
+    # ── Module 1: CMETS extraction ────────────────────────────────────────────
+    cmets_path = run_cmets_extraction(
+        source_dir = args.source_dir,
+        output_dir = args.output_dir,
+        excel_path = args.cmets_excel,
+        single_pdf = args.pdf,
+        runtime    = runtime,
+    )
+    print(f"\n[Pipeline] ✓ Module 1 complete → {cmets_path.name}\n")
+
+    if args.skip_effectiveness:
+        print("[Pipeline] --skip-effectiveness set. Done.\n")
+        return
+
+    # ── Module 2: Effectiveness extraction ────────────────────────────────────
+    eff_df = pd.DataFrame()
+    try:
+        eff_df = run_effectiveness_extraction(
+            source_dir = args.effective_dir,
+            output_dir = args.eff_output_dir,
+            runtime    = runtime,
         )
-        all_results.append(result)
+        print(f"\n[Pipeline] ✓ Module 2 complete — {len(eff_df)} records\n")
+    except Exception:
+        logging.error("Module 2 failed — Module 3 will use cached JSONs only.")
+        traceback.print_exc()
 
-    total_pages_extracted = sum(r.total_pages_extracted for r in all_results)
-    total_pages_passed_gate = sum(r.pages_passed_gate for r in all_results)
-    total_pages_skipped = sum(r.pages_skipped for r in all_results)
-    total_rows = sum(r.total_rows for r in all_results)
+    # ── Module 3: Mapping ─────────────────────────────────────────────────────
+    try:
+        mapped_path = run_mapping(
+            cmets_excel_path         = cmets_path,
+            effectiveness_df         = eff_df,
+            effectiveness_output_dir = args.eff_output_dir,
+            mapped_excel_path        = args.mapped_excel,
+        )
+        print(f"\n[Pipeline] ✓ Module 3 complete → {mapped_path.name}\n")
+    except Exception:
+        logging.error("Module 3 failed.")
+        traceback.print_exc()
 
     print("=" * 64)
-    print("SUMMARY")
-    print(f"  PDFs processed   : {len(all_results)}")
-    print(f"  Pages extracted  : {total_pages_extracted}")
-    print(f"  Pages passed gate: {total_pages_passed_gate}")
-    print(f"  Pages skipped    : {total_pages_skipped}")
-    print(f"  Total rows parsed: {total_rows}")
-    print("=" * 64)
-
-    output = {
-        "pdfs_processed": len(all_results),
-        "total_pages_extracted": total_pages_extracted,
-        "total_pages_passed_gate": total_pages_passed_gate,
-        "total_pages_skipped": total_pages_skipped,
-        "total_rows": total_rows,
-        "results": [_serialize_result(result) for result in all_results],
-    }
-    with open(args.output, "w", encoding="utf-8") as f:
-        json.dump(output, f, indent=2, ensure_ascii=False)
-    finished_at = datetime.now()
-    runtime_seconds = perf_counter() - run_start
-    excel_path = export_results_to_excel(
-        output,
-        args.excel_output,
-        runtime_seconds=runtime_seconds,
-        started_at=started_at,
-        finished_at=finished_at,
-    )
-
-    print(f"\nOutput saved → {args.output}")
-    print(f"Excel saved  → {excel_path}  (intermediate — GNI extraction only)")
-    print(f"Runtime (s) → {runtime_seconds:.2f}")
-
-    if all_results and all_results[0].results:
-        first_page = all_results[0].results[0]
-        print(f"\nPreview — Page {first_page.page_number} (first PDF):")
-        for row in first_page.rows[:3]:
-            print(json.dumps(row.model_dump(by_alias=True), indent=2, ensure_ascii=False))
-
-    # ── EFFECTIVENESS: Extract + Merge → final_output.xlsx ──────
-    if not args.skip_effectiveness:
-        print("\n" + "=" * 64)
-        print("  EFFECTIVENESS EXTRACTION & MERGE")
-        print("=" * 64)
-
-        # Derive final_output path alongside the intermediate excel
-        excel_path_obj = Path(excel_path)
-        final_output_path = str(excel_path_obj.parent / "final_output.xlsx")
-
-        try:
-            eff_df = process_all_effectiveness_pdfs()
-            # Always attempt merge: even if eff_df is empty (all PDFs already
-            # cached from a previous run), merge_effectiveness_into_final will
-            # load data from disk JSONs via _build_eff_lookup_from_jsons.
-            merged_path = merge_effectiveness_into_final(
-                final_excel_path=str(excel_path),
-                effectiveness_df=eff_df,
-                output_excel_path=final_output_path,
-            )
-            print(f"\n[Pipeline] Final merged output → {merged_path}")
-        except Exception as e:
-            print(f"[Effectiveness] Error during extraction/merge: {e}")
-            import traceback
-            traceback.print_exc()
+    print("  ALL MODULES COMPLETE")
+    print("=" * 64 + "\n")
 
 
 if __name__ == "__main__":
