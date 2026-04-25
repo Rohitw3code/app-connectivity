@@ -1,12 +1,50 @@
-venv
-.env
+# ─── Python ───────────────────────────────────────────────────────────────────
 __pycache__/
-llm_client.bat
-page_chunks
-source_1
-CTUIL-Regenerators-Effective-Date-wise
-minutes_pdfs
+*.py[cod]
+*.pyo
+*.egg-info/
+*.egg
+dist/
+build/
+.venv/
+venv/
+env/
+.env
+
+# ─── Input source folders (PDF data — not version-controlled) ─────────────────
+source_1/
+CTUIL-Regenerators-Effective-Date-wise/
+app-connectivity-pdfs/
+minutes_pdfs/
+page_chunks/
+
+# ─── Output / cache folders (generated at runtime) ───────────────────────────
+source_1_output/
+effectiveness_output/
+jcc_output/
+
+# ─── Generated Excel reports (all in excels/) ────────────────────────────────
+excels/
+
+# ─── Generated JSON output ───────────────────────────────────────────────────
+effectiveness_mapped.json
+
+# ─── Old root-level outputs (if any still exist) ─────────────────────────────
+cmets.xlsx
+effectiveness_combined.xlsx
+effectiveness_mapped.xlsx
 output.xlsx
 output.json
-effectiveness_output/
 final_output.xlsx
+
+# ─── VM script ────────────────────────────────────────────────────────────────
+llm_client.bat
+
+# ─── IDE / OS ─────────────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db

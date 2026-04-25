@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 _START_DIR  = Path(__file__).resolve().parent.parent.parent   # …/start/
 SOURCE_DIR  : Path = _START_DIR / "source_1"
 OUTPUT_DIR  : Path = _START_DIR / "source_1_output"
-CMETS_EXCEL : Path = _START_DIR / "cmets.xlsx"
+CMETS_EXCEL : Path = _START_DIR / "excels" / "cmets.xlsx"
 
 
 # ─── Serialisation ────────────────────────────────────────────────────────────

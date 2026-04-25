@@ -29,9 +29,9 @@ logger = logging.getLogger(__name__)
 _START_DIR = Path(__file__).resolve().parent.parent.parent
 
 EFFECTIVENESS_OUTPUT_DIR : Path = _START_DIR / "effectiveness_output"
-CMETS_EXCEL_PATH         : Path = _START_DIR / "cmets.xlsx"
-MAPPED_JSON_PATH         : Path = _START_DIR / "effectiveness_mapped.json"
-MAPPED_EXCEL_PATH        : Path = _START_DIR / "effectiveness_mapped.xlsx"
+CMETS_EXCEL_PATH         : Path = _START_DIR / "excels" / "cmets.xlsx"
+MAPPED_JSON_PATH         : Path = _START_DIR / "excels" / "effectiveness_mapped.json"
+MAPPED_EXCEL_PATH        : Path = _START_DIR / "excels" / "effectiveness_mapped.xlsx"
 
 
 # ─── Public API ───────────────────────────────────────────────────────────────

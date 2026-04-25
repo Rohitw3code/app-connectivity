@@ -1,10 +1,11 @@
 """
-pipeline — Three-module PDF extraction & mapping pipeline
+pipeline — Four-module PDF extraction & mapping pipeline
 ==========================================================
 Sub-packages:
     cmets_handler/          → Module 1: CMETS PDF extraction
     effectiveness_handler/  → Module 2: Effectiveness PDF extraction
     mapping_handler/        → Module 3: CMETS × Effectiveness merge
+    jcc_handler/            → Module 4: JCC Meeting PDF extraction
 
 Shared utilities:
     excel_utils.py          → Generic JSON → Excel exporter
@@ -13,9 +14,11 @@ Shared utilities:
 from pipeline.cmets_handler         import run_cmets_extraction
 from pipeline.effectiveness_handler import run_effectiveness_extraction
 from pipeline.mapping_handler       import run_mapping
+from pipeline.jcc_handler           import run_jcc_extraction
 
 __all__ = [
     "run_cmets_extraction",
     "run_effectiveness_extraction",
     "run_mapping",
+    "run_jcc_extraction",
 ]

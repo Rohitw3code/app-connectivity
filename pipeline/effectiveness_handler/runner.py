@@ -31,7 +31,7 @@ _APP_DIR   = _START_DIR.parent
 
 EFFECTIVE_SOURCE_DIR    : Path = _APP_DIR / "CTUIL-Regenerators-Effective-Date-wise"
 EFFECTIVENESS_OUTPUT_DIR: Path = _START_DIR / "effectiveness_output"
-EFFECTIVENESS_EXCEL     : Path = _START_DIR / "effectiveness_combined.xlsx"
+EFFECTIVENESS_EXCEL     : Path = _START_DIR / "excels" / "effectiveness_combined.xlsx"
 
 
 # ─── Cache helpers ────────────────────────────────────────────────────────────
