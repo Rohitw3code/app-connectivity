@@ -42,17 +42,16 @@ logging.basicConfig(
 
 # ─── Required folders — auto-created on startup ──────────────────────────────
 _START_DIR = Path(__file__).resolve().parent
-_APP_DIR   = _START_DIR.parent
 
 REQUIRED_FOLDERS = [
     # (path, description)
-    (_START_DIR / "source_1",                               "CMETS PDF input"),
-    (_START_DIR / "source_1_output",                        "CMETS JSON cache"),
-    (_START_DIR / "effectiveness_output",                   "Effectiveness JSON cache"),
-    (_APP_DIR   / "CTUIL-Regenerators-Effective-Date-wise", "Effectiveness PDF input"),
-    (_START_DIR / "jcc_output",                             "JCC JSON cache"),
-    (_APP_DIR   / "app-connectivity-pdfs" / "source_2",     "JCC PDF input"),
-    (_START_DIR / "excels",                                 "Generated Excel reports"),
+    (_START_DIR / "source" / "cmets_pdfs",           "CMETS PDF input"),
+    (_START_DIR / "source" / "effectiveness_pdfs",   "Effectiveness PDF input"),
+    (_START_DIR / "source" / "jcc_pdfs",             "JCC PDF input"),
+    (_START_DIR / "output" / "cmets_cache",           "CMETS JSON cache"),
+    (_START_DIR / "output" / "effectiveness_cache",   "Effectiveness JSON cache"),
+    (_START_DIR / "output" / "jcc_cache",             "JCC JSON cache"),
+    (_START_DIR / "excels",                           "Generated Excel reports"),
 ]
 
 
@@ -61,9 +60,9 @@ def _ensure_folders() -> None:
     for folder, desc in REQUIRED_FOLDERS:
         if not folder.exists():
             folder.mkdir(parents=True, exist_ok=True)
-            print(f"  [Created] {folder.relative_to(_APP_DIR)}  ({desc})")
+            print(f"  [Created] {folder.relative_to(_START_DIR)}  ({desc})")
         else:
-            print(f"  [OK]      {folder.relative_to(_APP_DIR)}")
+            print(f"  [OK]      {folder.relative_to(_START_DIR)}")
 
 
 # ─── CLI ──────────────────────────────────────────────────────────────────────
@@ -76,21 +75,21 @@ def _build_args() -> argparse.Namespace:
     p.add_argument("--pdf",              default=None, metavar="FILE",
                    help="Process a single PDF only (Module 1 only)")
     p.add_argument("--source-dir",       default=None, metavar="DIR",
-                   help="CMETS PDF folder               (default: source_1/)")
+                   help="CMETS PDF folder               (default: source/cmets_pdfs/)")
     p.add_argument("--output-dir",       default=None, metavar="DIR",
-                   help="CMETS JSON cache folder        (default: source_1_output/)")
+                   help="CMETS JSON cache folder        (default: output/cmets_cache/)")
     p.add_argument("--cmets-excel",      default=None, metavar="FILE",
                    help="CMETS Excel output             (default: excels/cmets.xlsx)")
     p.add_argument("--effective-dir",    default=None, metavar="DIR",
-                   help="Effectiveness PDF folder       (default: auto-resolved)")
+                   help="Effectiveness PDF folder       (default: source/effectiveness_pdfs/)")
     p.add_argument("--eff-output-dir",   default=None, metavar="DIR",
-                   help="Effectiveness JSON cache folder(default: effectiveness_output/)")
+                   help="Effectiveness JSON cache folder(default: output/effectiveness_cache/)")
     p.add_argument("--mapped-excel",     default=None, metavar="FILE",
                    help="Mapped output Excel            (default: excels/effectiveness_mapped.xlsx)")
     p.add_argument("--jcc-source-dir",   default=None, metavar="DIR",
-                   help="JCC PDF folder                 (default: source_2/)")
+                   help="JCC PDF folder                 (default: source/jcc_pdfs/)")
     p.add_argument("--jcc-output-dir",   default=None, metavar="DIR",
-                   help="JCC JSON cache folder          (default: jcc_output/)")
+                   help="JCC JSON cache folder          (default: output/jcc_cache/)")
     p.add_argument("--skip-effectiveness", action="store_true",
                    help="Run Module 1 only; skip Modules 2, 3, 4")
     p.add_argument("--mode",             choices=["vm", "laptop"], default=None,
@@ -160,7 +159,7 @@ def main() -> None:
             cmets_excel_path         = cmets_path,
             effectiveness_df         = eff_df,
             effectiveness_output_dir = args.eff_output_dir,
-            mapped_json_path         = str(_START_DIR / "effectiveness_mapped.json"),
+            mapped_json_path         = str(_START_DIR / "output" / "effectiveness_mapped.json"),
             mapped_excel_path        = mapped_excel,
         )
         print(f"\n[Pipeline] ✓ Module 3 complete → {mapped_path.name}\n")

@@ -161,6 +161,38 @@ def norm_dev(v: Optional[str]) -> Optional[str]:
     return None if any(t in v.upper() for t in (" LOA", "CRITERION", "APPLYING")) else v
 
 
+# Valid energy source types (normalised lowercase -> display form)
+_VALID_TYPES: dict[str, str] = {
+    "solar":          "Solar",
+    "wind":           "Wind",
+    "hybrid":         "Hybrid",
+    "bess":           "BESS",
+    "solar + bess":   "Solar + BESS",
+    "solar+bess":     "Solar + BESS",
+    "hybrid + bess":  "Hybrid + BESS",
+    "hybrid+bess":    "Hybrid + BESS",
+    "hydro":          "Hydro",
+    "hydro + bess":   "Hydro+BESS",
+    "hydro+bess":     "Hydro+BESS",
+    "thermal":        "Thermal",
+}
+
+
+def norm_type(v: Optional[str]) -> Optional[str]:
+    """Normalise the energy source type to a canonical value."""
+    v = clean(v)
+    if not v:
+        return None
+    key = re.sub(r"\s+", " ", v.strip().lower())
+    if key in _VALID_TYPES:
+        return _VALID_TYPES[key]
+    # Fuzzy match: check if any valid type is a substring
+    for k, canonical in _VALID_TYPES.items():
+        if k in key:
+            return canonical
+    return v  # return as-is if not recognised
+
+
 # ── Composite operations ─────────────────────────────────────────────────────
 
 def validate_rows(raw_rows: list[dict]) -> list[MappedRow]:
@@ -195,6 +227,7 @@ def normalize(rows: list[MappedRow]) -> list[MappedRow]:
         p["State"]                           = extract_state(p.get("Project Location"))
         p["substaion"]                       = clean(p.get("substaion"))
         p["Name of the developers"]          = norm_dev(p.get("Name of the developers"))
+        p["type"]                            = norm_type(p.get("type"))
         p["GNA/ST II Application ID"]        = norm_num_ids(raw_gna, strip_zeros=False)
 
         if not clean(p["GNA/ST II Application ID"]):

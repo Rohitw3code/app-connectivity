@@ -1,8 +1,9 @@
 """
 cmets_handler/runner.py — CMETS Orchestration (discovery, cache, Excel)
 =========================================================================
-Discovers all PDFs in source_1/, checks JSON cache in source_1_output/,
-extracts only un-cached PDFs, flattens results, writes cmets.xlsx.
+Discovers all PDFs in source/cmets_pdfs/, checks JSON cache in
+output/cmets_cache/, extracts only un-cached PDFs, flattens results,
+writes excels/cmets.xlsx.
 
 This is the only file that performs I/O orchestration for Module 1.
 Edit extraction.py or normalization.py to change how data is extracted
@@ -27,8 +28,8 @@ logger = logging.getLogger(__name__)
 
 # ─── Default I/O paths ────────────────────────────────────────────────────────
 _START_DIR  = Path(__file__).resolve().parent.parent.parent   # …/start/
-SOURCE_DIR  : Path = _START_DIR / "source_1"
-OUTPUT_DIR  : Path = _START_DIR / "source_1_output"
+SOURCE_DIR  : Path = _START_DIR / "source" / "cmets_pdfs"
+OUTPUT_DIR  : Path = _START_DIR / "output" / "cmets_cache"
 CMETS_EXCEL : Path = _START_DIR / "excels" / "cmets.xlsx"
 
 

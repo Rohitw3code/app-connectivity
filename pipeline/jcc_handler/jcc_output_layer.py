@@ -365,7 +365,7 @@ _START_DIR = Path(__file__).resolve().parent.parent.parent
 
 # Default paths
 EFFECTIVENESS_EXCEL : Path = _START_DIR / "excels" / "effectiveness_combined.xlsx"
-EFFECTIVENESS_DIR   : Path = _START_DIR / "effectiveness_output"
+EFFECTIVENESS_DIR   : Path = _START_DIR / "output" / "effectiveness_cache"
 JCC_OUTPUT_EXCEL    : Path = _START_DIR / "excels" / "jcc_output_layer.xlsx"
 
 

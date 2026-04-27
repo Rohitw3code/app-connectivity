@@ -19,6 +19,7 @@ class MappedRow(BaseModel):
     state:              Optional[str] = Field(None, alias="State")
     substaion:          Optional[str] = Field(None, alias="substaion")
     name_of_developers: Optional[str] = Field(None, alias="Name of the developers")
+    type:               Optional[str] = Field(None, alias="type")
     gna_st2_id:         Optional[str] = Field(None, alias="GNA/ST II Application ID")
     lta_id:             Optional[str] = Field(None, alias="LTA Application ID")
     enhancement_id:     Optional[str] = Field(None, alias="Application ID under Enhancement 5.2 or revision")
@@ -56,6 +57,7 @@ class PipelineResult(BaseModel):
 CMETS_COLUMNS = [
     "PDF", "Page Number",
     "Project Location", "State", "substaion", "Name of the developers",
+    "type",
     "GNA/ST II Application ID", "LTA Application ID",
     "Application ID under Enhancement 5.2 or revision",
     "Application Quantum (MW)(ST II)", "Nature of Applicant",

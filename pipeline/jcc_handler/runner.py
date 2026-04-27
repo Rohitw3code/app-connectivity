@@ -34,10 +34,9 @@ logger = logging.getLogger(__name__)
 
 # ─── Default I/O paths ────────────────────────────────────────────────────────
 _START_DIR = Path(__file__).resolve().parent.parent.parent   # …/start/
-_APP_DIR   = _START_DIR.parent                                # …/App-connectivity/
 
-JCC_SOURCE_DIR  : Path = _APP_DIR / "app-connectivity-pdfs" / "source_2"
-JCC_OUTPUT_DIR  : Path = _START_DIR / "jcc_output"
+JCC_SOURCE_DIR  : Path = _START_DIR / "source" / "jcc_pdfs"
+JCC_OUTPUT_DIR  : Path = _START_DIR / "output" / "jcc_cache"
 JCC_EXCEL       : Path = _START_DIR / "excels" / "jcc_extracted.xlsx"
 
 

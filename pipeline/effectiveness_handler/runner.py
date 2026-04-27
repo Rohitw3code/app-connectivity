@@ -27,10 +27,9 @@ logger = logging.getLogger(__name__)
 
 # ─── Default I/O paths ────────────────────────────────────────────────────────
 _START_DIR = Path(__file__).resolve().parent.parent.parent
-_APP_DIR   = _START_DIR.parent
 
-EFFECTIVE_SOURCE_DIR    : Path = _APP_DIR / "CTUIL-Regenerators-Effective-Date-wise"
-EFFECTIVENESS_OUTPUT_DIR: Path = _START_DIR / "effectiveness_output"
+EFFECTIVE_SOURCE_DIR    : Path = _START_DIR / "source" / "effectiveness_pdfs"
+EFFECTIVENESS_OUTPUT_DIR: Path = _START_DIR / "output" / "effectiveness_cache"
 EFFECTIVENESS_EXCEL     : Path = _START_DIR / "excels" / "effectiveness_combined.xlsx"
 
 
