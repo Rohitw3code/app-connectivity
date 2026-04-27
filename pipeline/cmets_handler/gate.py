@@ -16,6 +16,27 @@ from __future__ import annotations
 
 import re
 
+# ── Blocklist: pages containing these patterns are REJECTED ──────────────────
+# If ANY blocklist pattern matches the page text, the page is skipped entirely.
+# This prevents extraction from GNARE tables, bulk-consumer tables, etc.
+
+BLOCKLIST_PATTERNS: list[str] = [
+    # GNARE-related columns — these tables are NOT connectivity applications
+    r"\bGNARE\s+within\s+Region\b",
+    r"\bGNARE\s+outside\s+Region\b",
+    r"\bTotal\s+GNARE\s+Required\b",
+    r"\bStart\s+date\s+of\s+GNARE\b",
+    r"\bEnd\s+date\s+of\s+GNARE\b",
+    r"\bGNARE\b.*\bMW\b",
+]
+
+# Nature of Applicant values that indicate non-generator tables to skip
+BLOCKLIST_APPLICANT_TYPES: list[str] = [
+    r"\bBulk\s+consumer\b",
+    r"\bDrawee\s+entity\b",
+    r"\bDrawee\s+entity\s+connected\b",
+]
+
 # ── Strategy 1: Header-based regex patterns ──────────────────────────────────
 # Each key is the canonical column name used downstream.
 # Each value is a list of "variant" patterns — a variant is a list of regex
@@ -239,20 +260,47 @@ def _value_detect(text: str) -> dict[str, bool]:
     return results
 
 
+def _is_blocklisted(text: str) -> bool:
+    """Return True if the page text matches any blocklist pattern.
+
+    Blocklisted pages contain GNARE tables or non-generator applicant
+    types that should never be extracted.
+    """
+    for pat in BLOCKLIST_PATTERNS:
+        if re.search(pat, text, re.IGNORECASE):
+            return True
+    # Check if the dominant Nature of Applicant values are blocklisted types
+    # (only block if these appear as column-value patterns, not just in passing)
+    for pat in BLOCKLIST_APPLICANT_TYPES:
+        matches = re.findall(pat, text, re.IGNORECASE)
+        if len(matches) >= 2:  # multiple occurrences = likely a column value
+            return True
+    return False
+
+
 def page_passes_gate(text: str) -> tuple[bool, list[str]]:
-    """Check whether *text* contains a CMETS data table.
+    """Check whether *text* contains a valid CMETS data table.
 
     Uses a dual strategy:
       1. Header-based regex matching (existing logic)
       2. Value-based fingerprint matching (fallback for variant headers)
 
+    Also applies **blocklist rejection**:
+      - Pages with GNARE columns are rejected
+      - Pages dominated by blocklisted applicant types are rejected
+
     Returns
     -------
     (passed, active_fields)
-        ``passed`` is True if at least one column is detected.
+        ``passed`` is True if at least one column is detected
+        AND the page is not blocklisted.
         ``active_fields`` lists the detected column names (union of both
         strategies, deduplicated).
     """
+    # ── Blocklist check (reject before any detection) ─────────────────────
+    if _is_blocklisted(text):
+        return False, []
+
     header_hits = _header_detect(text)
     value_hits  = _value_detect(text)
 

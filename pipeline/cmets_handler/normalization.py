@@ -193,13 +193,52 @@ def norm_type(v: Optional[str]) -> Optional[str]:
     return v  # return as-is if not recognised
 
 
-# ── Composite operations ─────────────────────────────────────────────────────
+# ── Row-level blocklist values for Nature of Applicant ────────────────────────
+# Rows with these values are skipped entirely (not connectivity generators).
+_NATURE_BLOCKLIST = [
+    "bulk consumer",
+    "drawee entity",
+    "drawee entity connected",
+]
+
+
+def _has_any_primary_key(row: dict) -> bool:
+    """Return True if the row has at least one primary ID field.
+
+    Primary keys: GNA/ST II Application ID, LTA Application ID,
+    or Application ID under Enhancement 5.2 or revision.
+    """
+    return bool(
+        clean(row.get("GNA/ST II Application ID"))
+        or clean(row.get("LTA Application ID"))
+        or clean(row.get("Application ID under Enhancement 5.2 or revision"))
+    )
+
+
+def _is_nature_blocklisted(row: dict) -> bool:
+    """Return True if the Nature of Applicant value is in the blocklist."""
+    nature = clean(row.get("Nature of Applicant"))
+    if not nature:
+        return False
+    lower = nature.lower()
+    return any(blocked in lower for blocked in _NATURE_BLOCKLIST)
+
 
 def validate_rows(raw_rows: list[dict]) -> list[MappedRow]:
-    """Filter raw dicts → valid MappedRow objects (must have GNA ID)."""
+    """Filter raw dicts → valid MappedRow objects.
+
+    A row must have at least ONE primary key ID (GNA/ST-II, LTA,
+    or Enhancement 5.2) and must NOT have a blocklisted Nature of
+    Applicant value.
+    """
     out = []
     for row in raw_rows:
-        if not clean(row.get("GNA/ST II Application ID")):
+        # Primary key check: need at least one ID
+        if not _has_any_primary_key(row):
+            continue
+        # Nature of Applicant blocklist
+        if _is_nature_blocklisted(row):
+            print(f"      [SKIP] Blocklisted Nature of Applicant: {row.get('Nature of Applicant')}")
             continue
         try:
             out.append(MappedRow.model_validate(row))
@@ -230,11 +269,15 @@ def normalize(rows: list[MappedRow]) -> list[MappedRow]:
         p["type"]                            = norm_type(p.get("type"))
         p["GNA/ST II Application ID"]        = norm_num_ids(raw_gna, strip_zeros=False)
 
-        if not clean(p["GNA/ST II Application ID"]):
-            continue
-
+        # Primary key check: need at least one ID after normalisation
+        has_gna = bool(clean(p["GNA/ST II Application ID"]))
         p["LTA Application ID"]              = norm_num_ids(raw_lta, strip_zeros=True)
+        has_lta = bool(clean(p["LTA Application ID"]))
         p["Application ID under Enhancement 5.2 or revision"] = derive_enhancement_id(raw_enh, raw_gna, raw_lta, raw_mode)
+        has_enh = bool(clean(p["Application ID under Enhancement 5.2 or revision"]))
+
+        if not (has_gna or has_lta or has_enh):
+            continue
         p["Application Quantum (MW)(ST II)"] = clean(p.get("Application Quantum (MW)(ST II)"))
         p["Nature of Applicant"]             = clean(p.get("Nature of Applicant"))
         p["Mode(Criteria for applying)"]     = clean(p.get("Mode(Criteria for applying)"))

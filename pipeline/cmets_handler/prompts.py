@@ -117,7 +117,21 @@ EXTRACTION RULES (CRITICAL)
 - Keep values as strings exactly as seen in the text.
 - Ignore headers, footnotes, and purely explanatory paragraphs.
 - "Name of the developers" must be the company/applicant name, NOT criterion values like "SECI LOA".
-- PRIMARY KEY RULE: "GNA/ST II Application ID" is mandatory. If a row lacks it, DO NOT output it.
+
+PRIMARY KEY RULE (CRITICAL):
+  A row MUST have at least ONE of these three IDs to be valid:
+    • "GNA/ST II Application ID"
+    • "LTA Application ID"
+    • "Application ID under Enhancement 5.2 or revision"
+  If a row has NONE of these three IDs, DO NOT output it.
+
+SKIP RULES — DO NOT extract rows if:
+  • "Nature of Applicant" is "Bulk consumer" or "Drawee entity" or
+    "Drawee entity connected" — these are NOT generator applications.
+  • The table contains GNARE columns like "GNARE within Region (MW)",
+    "GNARE outside Region (MW)", "Total GNARE Required (MW)",
+    "Start date of GNARE", "End date of GNARE".
+    If you detect ANY GNARE column, return {{"rows": []}}.
 - For "GNA Operationalization Date" look near SCoD/SCOD terms.
 - For "GNA Operationalization (Yes/No)" return null (computed in post-processing).
 - For "Status of application..." map wording to: Withdrawn / granted / Revoked.
