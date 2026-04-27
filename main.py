@@ -154,8 +154,8 @@ def main() -> None:
         traceback.print_exc()
 
     # ── Module 3: Mapping ─────────────────────────────────────────────────────
+    mapped_excel = args.mapped_excel or str(excels_dir / "effectiveness_mapped.xlsx")
     try:
-        mapped_excel = args.mapped_excel or str(excels_dir / "effectiveness_mapped.xlsx")
         mapped_path  = run_mapping(
             cmets_excel_path         = cmets_path,
             effectiveness_df         = eff_df,
@@ -168,13 +168,19 @@ def main() -> None:
         logging.error("Module 3 failed.")
         traceback.print_exc()
 
-    # ── Module 4: JCC extraction ──────────────────────────────────────────────
+    # ── Module 4: JCC extraction + Output Layer + Layer 4 ─────────────────
     try:
         jcc_df = run_jcc_extraction(
-            source_dir = args.jcc_source_dir,
-            output_dir = args.jcc_output_dir,
-            excel_path = str(excels_dir / "jcc_extracted.xlsx"),
-            runtime    = runtime,
+            source_dir               = args.jcc_source_dir,
+            output_dir               = args.jcc_output_dir,
+            excel_path               = str(excels_dir / "jcc_extracted.xlsx"),
+            runtime                  = runtime,
+            effectiveness_df         = eff_df,
+            effectiveness_excel_path = str(excels_dir / "effectiveness_combined.xlsx"),
+            effectiveness_output_dir = args.eff_output_dir,
+            jcc_output_excel_path    = str(excels_dir / "jcc_output_layer.xlsx"),
+            mapped_excel_path        = mapped_excel,
+            layer4_excel_path        = str(excels_dir / "layer_4.xlsx"),
         )
         print(f"\n[Pipeline] ✓ Module 4 complete — {len(jcc_df)} rows\n")
     except Exception:

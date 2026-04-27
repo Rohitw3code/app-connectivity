@@ -5,9 +5,13 @@ Discovers all JCC Meeting PDFs in the source folder (recursive scan),
 checks JSON cache, extracts un-cached PDFs, writes per-PDF and combined
 JSON + Excel output.
 
+After extraction, runs the **JCC Output Layer** which cross-references
+with effectiveness data to compute GNA / TGNA values.
+
 This is the only file that performs I/O orchestration for Module 4.
 Edit extraction.py to change how tables are detected or parsed.
 Edit models.py to change column names or keyword filters.
+Edit jcc_output_layer.py to change the GNA/TGNA computation logic.
 """
 
 from __future__ import annotations
@@ -24,6 +28,7 @@ from config import RuntimeConfig, load_runtime_config
 from pipeline.excel_utils import export_to_excel
 from pipeline.jcc_handler.models import COLUMN_NAMES
 from pipeline.jcc_handler.extraction import extract_jcc_pdf
+from pipeline.jcc_handler.jcc_output_layer import run_jcc_output_layer, run_layer4_excel
 
 logger = logging.getLogger(__name__)
 
@@ -74,8 +79,36 @@ def run_jcc_extraction(
     output_dir:  Path | str | None = None,
     excel_path:  Path | str | None = None,
     runtime:     Optional[RuntimeConfig] = None,
+    *,
+    effectiveness_df: pd.DataFrame | None = None,
+    effectiveness_excel_path: Path | str | None = None,
+    effectiveness_output_dir: Path | str | None = None,
+    jcc_output_excel_path: Path | str | None = None,
+    mapped_excel_path: Path | str | None = None,
+    mapped_df: pd.DataFrame | None = None,
+    layer4_excel_path: Path | str | None = None,
 ) -> pd.DataFrame:
     """Discover JCC Meeting PDFs → extract (skip cached) → dump JSON → write Excel.
+
+    After extraction, runs the JCC Output Layer to cross-reference with
+    effectiveness data and compute GNA / TGNA values.
+
+    Parameters
+    ----------
+    effectiveness_df : DataFrame, optional
+        Pre-loaded effectiveness data (from Module 2).
+    effectiveness_excel_path : Path, optional
+        Path to effectiveness_combined.xlsx (fallback).
+    effectiveness_output_dir : Path, optional
+        Folder with effectiveness JSON caches (fallback).
+    jcc_output_excel_path : Path, optional
+        Output path for the 4-column JCC Output Excel.
+    mapped_excel_path : Path, optional
+        Path to effectiveness_mapped.xlsx (Module 3 output) for Layer 4.
+    mapped_df : DataFrame, optional
+        Pre-loaded Module 3 mapped DataFrame for Layer 4.
+    layer4_excel_path : Path, optional
+        Output path for the Layer 4 Excel (all mapped data + GNA/TGNA).
 
     Returns pd.DataFrame with all extracted JCC rows.
     """
@@ -175,4 +208,32 @@ def run_jcc_extraction(
         ],
     )
     print(f"\n[JCC] Excel → {xlsx}")
+
+    # ── JCC Output Layer — GNA / TGNA cross-reference ─────────────────────
+    try:
+        jcc_output_df = run_jcc_output_layer(
+            jcc_results              = all_results,
+            effectiveness_excel_path = effectiveness_excel_path,
+            effectiveness_df         = effectiveness_df,
+            effectiveness_output_dir = effectiveness_output_dir,
+            output_excel_path        = jcc_output_excel_path,
+        )
+        print(f"\n[JCC] ✓ Output Layer complete — {len(jcc_output_df)} rows")
+    except Exception as exc:
+        logger.error("[JCC] Output Layer failed: %s", exc)
+        print(f"\n[JCC] ⚠ Output Layer failed: {exc}")
+
+    # ── Layer 4 — Full mapped data + GNA / TGNA ──────────────────────────
+    try:
+        layer4_df = run_layer4_excel(
+            jcc_results       = all_results,
+            mapped_excel_path = mapped_excel_path,
+            mapped_df         = mapped_df,
+            output_excel_path = layer4_excel_path,
+        )
+        print(f"\n[JCC] ✓ Layer 4 complete — {len(layer4_df)} rows")
+    except Exception as exc:
+        logger.error("[JCC] Layer 4 failed: %s", exc)
+        print(f"\n[JCC] ⚠ Layer 4 failed: {exc}")
+
     return df
