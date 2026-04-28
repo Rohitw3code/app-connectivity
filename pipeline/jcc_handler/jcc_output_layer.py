@@ -683,10 +683,19 @@ def run_jcc_output_layer(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# LAYER 4 — Full Mapped Data + GNA / TGNA
+# LAYER 4 — CMETS-first JCC Mapping (GNA / TGNA)
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# New approach:
+#   1. Start from CMETS sheet (all rows, all columns)
+#   2. For each CMETS row, pick GNA ID → search JCC connectivity_applicant
+#   3. If not found → try LTA ID → search connectivity_applicant
+#   4. If not found → try 5.2 Enhancement ID → search connectivity_applicant
+#   5. When matched → compute GNA / TGNA from the matched JCC row
+#   6. Output: all CMETS columns + TGNA + GNA + match_source
 # ─────────────────────────────────────────────────────────────────────────────
 
-LAYER4_EXCEL: Path = _START_DIR / "excels" / "layer_4.xlsx"
+LAYER4_EXCEL: Path = _START_DIR / "excels" / "cmets_jcc_mapped.xlsx"
 
 
 def _find_col(df: pd.DataFrame, *candidates: str) -> Optional[str]:
@@ -698,221 +707,196 @@ def _find_col(df: pd.DataFrame, *candidates: str) -> Optional[str]:
     return None
 
 
-def find_strict_jcc_match(
-    substation: str,
-    developer_name: str,
+def _id_in_connectivity_applicant(search_id: str, jcc_rows: list[dict]) -> Optional[dict]:
+    """Search for *search_id* inside the `connectivity_applicant` column of
+    every JCC row.  Returns the first matching JCC row, or None.
+
+    The search is case-insensitive and normalised (whitespace-collapsed,
+    special characters stripped) so that minor formatting differences in
+    the PDF extraction don't prevent a match.
+    """
+    if not search_id:
+        return None
+
+    needle = _normalize_id(search_id)
+    if len(needle) < 3:
+        return None
+
+    for row in jcc_rows:
+        applicant_raw = _safe_str(row.get("connectivity_applicant"))
+        if not applicant_raw:
+            continue
+        haystack = _normalize_id(applicant_raw)
+        if needle in haystack:
+            return row
+    return None
+
+
+def _find_jcc_by_ids(
+    gna_ids: list[str],
+    lta_ids: list[str],
+    enh52_ids: list[str],
     jcc_rows: list[dict],
-    id_values: list[str] | None = None,
-    sub_threshold: float = 0.40,
-    dev_threshold: float = 0.40,
-) -> Optional[dict]:
-    """Find the best JCC row where IDs match, else BOTH substation AND developer match.
+) -> tuple[Optional[dict], str]:
+    """Try to find a matching JCC row using the cascading priority:
 
-    Unlike find_best_jcc_match (which uses a combined score),
-    this function requires BOTH dimensions to independently exceed
-    their respective thresholds.
+        1. GNA Application IDs
+        2. LTA Application IDs
+        3. Enhancement 5.2 Application IDs
 
-    Parameters
-    ----------
-    substation : str
-        Substation value from mapped data.
-    developer_name : str
-        Developer name from mapped data.
-    jcc_rows : list[dict]
-        Flattened JCC rows.
-    sub_threshold : float
-        Minimum fuzzy score for substation match (default 0.40).
-    dev_threshold : float
-        Minimum fuzzy score for developer match (default 0.40).
+    Each ID is searched against the *connectivity_applicant* column of
+    every JCC row.
 
     Returns
     -------
-    Best matching JCC row dict, or None if no row passes both thresholds.
+    (matched_jcc_row | None, match_source)
+        match_source is one of "GNA", "LTA", "5.2", or "" if no match.
     """
-    if not substation and not developer_name and not (id_values or []):
-        return None
+    # Priority 1 — GNA
+    for gid in gna_ids:
+        match = _id_in_connectivity_applicant(gid, jcc_rows)
+        if match is not None:
+            return match, "GNA"
 
-    best_id_match: Optional[dict] = None
-    best_id_hits: int = 0
-    best_id_fuzzy: float = 0.0
+    # Priority 2 — LTA
+    for lid in lta_ids:
+        match = _id_in_connectivity_applicant(lid, jcc_rows)
+        if match is not None:
+            return match, "LTA"
 
-    best_match: Optional[dict] = None
-    best_combined: float = 0.0
+    # Priority 3 — Enhancement 5.2
+    for eid in enh52_ids:
+        match = _id_in_connectivity_applicant(eid, jcc_rows)
+        if match is not None:
+            return match, "5.2"
 
-    ids = id_values or []
-
-    for row in jcc_rows:
-        pooling   = _safe_str(row.get("pooling_station"))
-        applicant = _safe_str(row.get("connectivity_applicant"))
-
-        # --- Substation score ---
-        sub_score = _fuzzy_score(substation, pooling)
-        if _substring_match(substation, pooling):
-            sub_score = min(1.0, sub_score + 0.15)
-
-        # --- Developer score ---
-        dev_score = _fuzzy_score(developer_name, applicant)
-        if _substring_match(developer_name, applicant):
-            dev_score = min(1.0, dev_score + 0.15)
-
-        combined = sub_score + dev_score
-
-        # ID-based match (priority)
-        id_hits = _row_id_match_count(row, ids)
-        if id_hits > 0:
-            if id_hits > best_id_hits or (id_hits == best_id_hits and combined > best_id_fuzzy):
-                best_id_hits = id_hits
-                best_id_fuzzy = combined
-                best_id_match = row
-
-        # BOTH must independently pass their thresholds
-        if sub_score < sub_threshold or dev_score < dev_threshold:
-            continue
-
-        if combined > best_combined:
-            best_combined = combined
-            best_match = row
-
-    return best_id_match or best_match
+    return None, ""
 
 
 def run_layer4_excel(
     jcc_results: list[dict],
     *,
+    cmets_excel_path: Path | str | None = None,
     mapped_excel_path: Path | str | None = None,
     mapped_df: pd.DataFrame | None = None,
     output_excel_path: Path | str | None = None,
-    sub_threshold: float = 0.40,
-    dev_threshold: float = 0.40,
 ) -> pd.DataFrame:
-    """Produce the Layer 4 Excel: all mapped data + GNA / TGNA columns.
+    """Produce the CMETS-JCC mapped Excel: all CMETS columns + TGNA + GNA.
 
-    Takes the FULL Module 3 mapped output (CMETS × Effectiveness) and
-    enriches it with GNA and TGNA values from JCC data.
-
-    Matching prioritizes GNA/LTA/Enhancement 5.2 IDs when available,
-    else requires BOTH developer name AND substation to match.
+    **Approach** (CMETS-first):
+      1. Load the CMETS extracted sheet as the base.
+      2. For each row, pick the GNA Application ID → search JCC extracted
+         data's ``connectivity_applicant`` column.
+      3. If GNA not found → try LTA Application ID.
+      4. If LTA not found → try "Application ID under Enhancement 5.2".
+      5. When a match is found → compute GNA / TGNA from the JCC row and
+         write the values into the output.
+      6. Output includes ALL CMETS columns + TGNA, GNA, Match Source.
 
     Parameters
     ----------
     jcc_results : list[dict]
-        Raw per-PDF JCC extraction results.
+        Raw per-PDF JCC extraction results (from runner / JSON cache).
+    cmets_excel_path : Path, optional
+        Path to cmets_extracted.xlsx (Module 1 output).
+        Default: excels/cmets_extracted.xlsx.
     mapped_excel_path : Path, optional
-        Path to effectiveness_mapped.xlsx (Module 3 output).
+        Legacy param — ignored in favour of cmets_excel_path.
     mapped_df : DataFrame, optional
-        Pre-loaded mapped DataFrame (takes priority over Excel).
+        Legacy param — ignored in favour of cmets_excel_path.
     output_excel_path : Path, optional
-        Output path. Default: excels/layer_4.xlsx.
-    sub_threshold : float
-        Min fuzzy score for substation (default 0.40).
-    dev_threshold : float
-        Min fuzzy score for developer name (default 0.40).
+        Output path. Default: excels/cmets_jcc_mapped.xlsx.
 
     Returns
     -------
-    pd.DataFrame — the full mapped data with GNA and TGNA columns appended.
+    pd.DataFrame — all CMETS data with TGNA, GNA, and Match Source appended.
     """
     xlsx_out = Path(output_excel_path).resolve() if output_excel_path else LAYER4_EXCEL
     xlsx_out.parent.mkdir(parents=True, exist_ok=True)
 
-    mapped_xlsx = Path(mapped_excel_path).resolve() if mapped_excel_path else (
-        _START_DIR / "excels" / "effectiveness_mapped.xlsx"
+    # ── Resolve CMETS source ──────────────────────────────────────────────
+    cmets_xlsx = (
+        Path(cmets_excel_path).resolve()
+        if cmets_excel_path
+        else _START_DIR / "excels" / "cmets_extracted.xlsx"
     )
 
     print("\n" + "=" * 64)
-    print("  LAYER 4 — FULL MAPPED DATA + GNA / TGNA")
+    print("  LAYER 4 — CMETS-FIRST JCC MAPPING (GNA / TGNA)")
     print("=" * 64)
 
-    # ── Load mapped data ──────────────────────────────────────────────────
-    if mapped_df is not None and not mapped_df.empty:
-        df = mapped_df.copy()
-        print(f"  Mapped data  : in-memory DataFrame ({len(df)} rows)")
-    elif mapped_xlsx.exists():
-        df = pd.read_excel(mapped_xlsx, sheet_name=0)
-        print(f"  Mapped Excel : {mapped_xlsx}")
-        print(f"  Rows loaded  : {len(df)}")
-    else:
-        print(f"  ⚠ Mapped Excel not found: {mapped_xlsx}")
-        print("    Run Module 3 (mapping) first.")
+    # ── Load CMETS data ───────────────────────────────────────────────────
+    if not cmets_xlsx.exists():
+        print(f"  ⚠ CMETS Excel not found: {cmets_xlsx}")
+        print("    Run Module 1 (CMETS extraction) first.")
         print("=" * 64)
         return pd.DataFrame()
+
+    df = pd.read_excel(cmets_xlsx, sheet_name=0)
+    print(f"  CMETS Excel  : {cmets_xlsx}")
+    print(f"  Rows loaded  : {len(df)}")
 
     # ── Flatten JCC data ──────────────────────────────────────────────────
     jcc_rows = flatten_jcc_data(jcc_results)
     print(f"  JCC rows     : {len(jcc_rows)}")
 
     if not jcc_rows:
-        print("  ⚠ No JCC rows — GNA/TGNA columns will be empty.")
+        print("  ⚠ No JCC rows — TGNA/GNA columns will be empty.")
         df["TGNA"] = None
         df["GNA"]  = None
-        df.to_excel(str(xlsx_out), index=False, sheet_name="Layer 4 Data")
+        df["Match Source"] = None
+        df.to_excel(str(xlsx_out), index=False, sheet_name="CMETS JCC Mapped")
         print(f"  Excel → {xlsx_out}")
         print("=" * 64)
         return df
 
-    # ── Identify developer name + substation + ID columns ────────────────
-    col_dev  = _find_col(df, "Name of the developers", "Name of developers",
-                         "Developer Name", "name_of_applicant")
-    col_sub  = _find_col(df, "substaion", "Substation", "substation")
-    col_gna  = _find_col(df, "GNA/ST II Application ID", "GNA ST II Application ID",
-                         "GNA Application ID", "GNA Application No")
-    col_lta  = _find_col(df, "LTA Application ID", "LTA Application No", "LTA No")
-    col_52   = _find_col(df, "Application ID under Enhancement 5.2 or revision",
-                         "Application ID under Enhancement 5.2",
-                         "Enhancement 5.2 Application ID")
+    # ── Identify ID columns in CMETS ─────────────────────────────────────
+    col_gna = _find_col(df, "GNA/ST II Application ID", "GNA ST II Application ID",
+                        "GNA Application ID", "GNA Application No")
+    col_lta = _find_col(df, "LTA Application ID", "LTA Application No", "LTA No")
+    col_52  = _find_col(df, "Application ID under Enhancement 5.2 or revision",
+                        "Application ID under Enhancement 5.2",
+                        "Enhancement 5.2 Application ID")
 
-    if not col_dev:
-        print("  ⚠ Cannot find developer name column in mapped data.")
-    if not col_sub:
-        print("  ⚠ Cannot find substation column in mapped data.")
-
-    print(f"  Developer col: {col_dev}")
-    print(f"  Substation col: {col_sub}")
-    print(f"  GNA ID col: {col_gna}")
-    print(f"  LTA ID col: {col_lta}")
-    print(f"  5.2 ID col: {col_52}")
+    print(f"  GNA ID col   : {col_gna}")
+    print(f"  LTA ID col   : {col_lta}")
+    print(f"  5.2 ID col   : {col_52}")
     print("-" * 64)
 
-    # ── Match each row and compute GNA / TGNA ─────────────────────────────
-    gna_values:  list[Optional[float]] = []
-    tgna_values: list[Optional[float]] = []
+    # ── Match each CMETS row → JCC connectivity_applicant ─────────────────
+    tgna_values:  list[Optional[float]] = []
+    gna_values:   list[Optional[float]] = []
+    match_sources: list[str]            = []
 
     matched_count = 0
-    gna_count  = 0
-    tgna_count = 0
+    gna_count     = 0
+    tgna_count    = 0
+    match_by      = {"GNA": 0, "LTA": 0, "5.2": 0}
 
     for idx, row in df.iterrows():
-        developer  = _safe_str(row.get(col_dev)) if col_dev else ""
-        substation = _safe_str(row.get(col_sub)) if col_sub else ""
-        id_values: list[str] = []
-        if col_gna:
-            id_values.extend(_split_ids(row.get(col_gna)))
-        if col_lta:
-            id_values.extend(_split_ids(row.get(col_lta)))
-        if col_52:
-            id_values.extend(_split_ids(row.get(col_52)))
+        gna_ids   = _split_ids(row.get(col_gna))   if col_gna else []
+        lta_ids   = _split_ids(row.get(col_lta))   if col_lta else []
+        enh52_ids = _split_ids(row.get(col_52))    if col_52  else []
 
-        if not developer and not substation and not id_values:
-            gna_values.append(None)
+        if not gna_ids and not lta_ids and not enh52_ids:
             tgna_values.append(None)
+            gna_values.append(None)
+            match_sources.append("")
             continue
 
-        # Strict match: BOTH developer AND substation must pass
-        jcc_match = find_strict_jcc_match(
-            substation     = substation,
-            developer_name = developer,
-            jcc_rows       = jcc_rows,
-            id_values      = id_values,
-            sub_threshold  = sub_threshold,
-            dev_threshold  = dev_threshold,
-        )
+        # Cascading search: GNA → LTA → 5.2 in connectivity_applicant
+        jcc_match, source = _find_jcc_by_ids(gna_ids, lta_ids, enh52_ids, jcc_rows)
 
         if jcc_match is None:
-            gna_values.append(None)
             tgna_values.append(None)
+            gna_values.append(None)
+            match_sources.append("")
             continue
 
         matched_count += 1
+        match_by[source] = match_by.get(source, 0) + 1
+
+        # Compute GNA / TGNA from the matched JCC row
         gna_val, tgna_val = compute_gna_tgna(jcc_match)
 
         if gna_val is not None:
@@ -920,20 +904,25 @@ def run_layer4_excel(
         if tgna_val is not None:
             tgna_count += 1
 
-        gna_values.append(gna_val)
         tgna_values.append(tgna_val)
+        gna_values.append(gna_val)
+        match_sources.append(source)
 
-    # ── Append columns ────────────────────────────────────────────────────
-    df["TGNA"] = tgna_values
-    df["GNA"]  = gna_values
+    # ── Append new columns to CMETS data ──────────────────────────────────
+    df["TGNA"]         = tgna_values
+    df["GNA"]          = gna_values
+    df["Match Source"] = match_sources
 
     # ── Write Excel ───────────────────────────────────────────────────────
     print(f"\n  Layer 4 Results:")
-    print(f"    Total rows               : {len(df)}")
-    print(f"    Matched to JCC (both)    : {matched_count}")
-    print(f"    GNA values populated     : {gna_count}")
-    print(f"    TGNA values populated    : {tgna_count}")
-    print(f"    Unmatched                : {len(df) - matched_count}")
+    print(f"    Total CMETS rows          : {len(df)}")
+    print(f"    Matched to JCC            : {matched_count}")
+    print(f"      via GNA ID              : {match_by.get('GNA', 0)}")
+    print(f"      via LTA ID              : {match_by.get('LTA', 0)}")
+    print(f"      via 5.2 Enhancement ID  : {match_by.get('5.2', 0)}")
+    print(f"    GNA values populated      : {gna_count}")
+    print(f"    TGNA values populated     : {tgna_count}")
+    print(f"    Unmatched                 : {len(df) - matched_count}")
 
     flat_records = df.to_dict(orient="records")
     col_order = list(df.columns)
@@ -941,16 +930,19 @@ def run_layer4_excel(
     export_to_excel(
         rows         = flat_records,
         output_path  = xlsx_out,
-        sheet_name   = "Layer 4 Data",
+        sheet_name   = "CMETS JCC Mapped",
         column_order = col_order,
         summary_rows = [
-            ("Total rows",          len(df)),
-            ("Matched to JCC",      matched_count),
-            ("GNA values found",    gna_count),
-            ("TGNA values found",   tgna_count),
-            ("Unmatched rows",      len(df) - matched_count),
+            ("Total CMETS rows",        len(df)),
+            ("Matched to JCC",          matched_count),
+            ("  via GNA ID",            match_by.get("GNA", 0)),
+            ("  via LTA ID",            match_by.get("LTA", 0)),
+            ("  via 5.2 Enhancement",   match_by.get("5.2", 0)),
+            ("GNA values found",        gna_count),
+            ("TGNA values found",       tgna_count),
+            ("Unmatched rows",          len(df) - matched_count),
         ],
     )
-    print(f"\n  ✓ Layer 4 Excel → {xlsx_out}")
+    print(f"\n  ✓ CMETS-JCC Mapped Excel → {xlsx_out}")
     print("=" * 64)
     return df

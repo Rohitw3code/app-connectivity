@@ -87,11 +87,16 @@ def run_jcc_extraction(
     mapped_excel_path: Path | str | None = None,
     mapped_df: pd.DataFrame | None = None,
     layer4_excel_path: Path | str | None = None,
+    cmets_excel_path: Path | str | None = None,
 ) -> pd.DataFrame:
     """Discover JCC Meeting PDFs → extract (skip cached) → dump JSON → write Excel.
 
     After extraction, runs the JCC Output Layer to cross-reference with
     effectiveness data and compute GNA / TGNA values.
+
+    Then runs Layer 4 (CMETS-first JCC mapping) which searches for
+    CMETS application IDs (GNA → LTA → 5.2) in the JCC
+    connectivity_applicant column and computes GNA / TGNA.
 
     Parameters
     ----------
@@ -104,11 +109,13 @@ def run_jcc_extraction(
     jcc_output_excel_path : Path, optional
         Output path for the 4-column JCC Output Excel.
     mapped_excel_path : Path, optional
-        Path to effectiveness_mapped.xlsx (Module 3 output) for Layer 4.
+        Path to effectiveness_mapped.xlsx (Module 3 output) — legacy.
     mapped_df : DataFrame, optional
-        Pre-loaded Module 3 mapped DataFrame for Layer 4.
+        Pre-loaded Module 3 mapped DataFrame — legacy.
     layer4_excel_path : Path, optional
-        Output path for the Layer 4 Excel (all mapped data + GNA/TGNA).
+        Output path for the CMETS-JCC mapped Excel (all CMETS + GNA/TGNA).
+    cmets_excel_path : Path, optional
+        Path to cmets_extracted.xlsx (Module 1 output) for Layer 4.
 
     Returns pd.DataFrame with all extracted JCC rows.
     """
@@ -224,10 +231,11 @@ def run_jcc_extraction(
         logger.error("[JCC] Output Layer failed: %s", exc)
         print(f"\n[JCC] ⚠ Output Layer failed: {exc}")
 
-    # ── Layer 4 — Full mapped data + GNA / TGNA ──────────────────────────
+    # ── Layer 4 — CMETS-first JCC mapping + GNA / TGNA ─────────────────
     try:
         layer4_df = run_layer4_excel(
             jcc_results       = all_results,
+            cmets_excel_path  = cmets_excel_path,
             mapped_excel_path = mapped_excel_path,
             mapped_df         = mapped_df,
             output_excel_path = layer4_excel_path,

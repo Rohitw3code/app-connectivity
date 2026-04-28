@@ -180,7 +180,8 @@ def main() -> None:
             jcc_output_excel_path    = str(excels_dir / "jcc_output_layer.xlsx"),
             jcc_mapped_excel_path    = str(excels_dir / "jcc_extracted_mapped.xlsx"),
             mapped_excel_path        = mapped_excel,
-            layer4_excel_path        = str(excels_dir / "cmets_effectiveness_jcc.xlsx"),
+            layer4_excel_path        = str(excels_dir / "cmets_jcc_mapped.xlsx"),
+            cmets_excel_path         = str(cmets_path),
         )
         print(f"\n[Pipeline] ✓ Module 4 complete — {len(jcc_df)} rows\n")
     except Exception:
