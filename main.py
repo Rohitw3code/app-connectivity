@@ -79,13 +79,13 @@ def _build_args() -> argparse.Namespace:
     p.add_argument("--output-dir",       default=None, metavar="DIR",
                    help="CMETS JSON cache folder        (default: output/cmets_cache/)")
     p.add_argument("--cmets-excel",      default=None, metavar="FILE",
-                   help="CMETS Excel output             (default: excels/cmets.xlsx)")
+                   help="CMETS Excel output             (default: excels/cmets_extracted.xlsx)")
     p.add_argument("--effective-dir",    default=None, metavar="DIR",
                    help="Effectiveness PDF folder       (default: source/effectiveness_pdfs/)")
     p.add_argument("--eff-output-dir",   default=None, metavar="DIR",
                    help="Effectiveness JSON cache folder(default: output/effectiveness_cache/)")
     p.add_argument("--mapped-excel",     default=None, metavar="FILE",
-                   help="Mapped output Excel            (default: excels/effectiveness_mapped.xlsx)")
+                   help="Mapped output Excel            (default: excels/cmets_effectiveness_mapped.xlsx)")
     p.add_argument("--jcc-source-dir",   default=None, metavar="DIR",
                    help="JCC PDF folder                 (default: source/jcc_pdfs/)")
     p.add_argument("--jcc-output-dir",   default=None, metavar="DIR",
@@ -124,7 +124,7 @@ def main() -> None:
     excels_dir = _START_DIR / "excels"
 
     # ── Module 1: CMETS extraction ────────────────────────────────────────────
-    cmets_excel = args.cmets_excel or str(excels_dir / "cmets.xlsx")
+    cmets_excel = args.cmets_excel or str(excels_dir / "cmets_extracted.xlsx")
     cmets_path  = run_cmets_extraction(
         source_dir = args.source_dir,
         output_dir = args.output_dir,
@@ -144,7 +144,7 @@ def main() -> None:
         eff_df = run_effectiveness_extraction(
             source_dir = args.effective_dir,
             output_dir = args.eff_output_dir,
-            excel_path = str(excels_dir / "effectiveness_combined.xlsx"),
+            excel_path = str(excels_dir / "effectiveness_extracted.xlsx"),
             runtime    = runtime,
         )
         print(f"\n[Pipeline] ✓ Module 2 complete — {len(eff_df)} records\n")
@@ -153,13 +153,13 @@ def main() -> None:
         traceback.print_exc()
 
     # ── Module 3: Mapping ─────────────────────────────────────────────────────
-    mapped_excel = args.mapped_excel or str(excels_dir / "effectiveness_mapped.xlsx")
+    mapped_excel = args.mapped_excel or str(excels_dir / "cmets_effectiveness_mapped.xlsx")
     try:
         mapped_path  = run_mapping(
             cmets_excel_path         = cmets_path,
             effectiveness_df         = eff_df,
             effectiveness_output_dir = args.eff_output_dir,
-            mapped_json_path         = str(_START_DIR / "output" / "effectiveness_mapped.json"),
+            mapped_json_path         = str(_START_DIR / "output" / "cmets_effectiveness_mapped.json"),
             mapped_excel_path        = mapped_excel,
         )
         print(f"\n[Pipeline] ✓ Module 3 complete → {mapped_path.name}\n")
@@ -175,11 +175,12 @@ def main() -> None:
             excel_path               = str(excels_dir / "jcc_extracted.xlsx"),
             runtime                  = runtime,
             effectiveness_df         = eff_df,
-            effectiveness_excel_path = str(excels_dir / "effectiveness_combined.xlsx"),
+            effectiveness_excel_path = str(excels_dir / "effectiveness_extracted.xlsx"),
             effectiveness_output_dir = args.eff_output_dir,
             jcc_output_excel_path    = str(excels_dir / "jcc_output_layer.xlsx"),
+            jcc_mapped_excel_path    = str(excels_dir / "jcc_extracted_mapped.xlsx"),
             mapped_excel_path        = mapped_excel,
-            layer4_excel_path        = str(excels_dir / "layer_4.xlsx"),
+            layer4_excel_path        = str(excels_dir / "cmets_effectiveness_jcc.xlsx"),
         )
         print(f"\n[Pipeline] ✓ Module 4 complete — {len(jcc_df)} rows\n")
     except Exception:

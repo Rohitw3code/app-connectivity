@@ -476,6 +476,7 @@ _START_DIR = Path(__file__).resolve().parent.parent.parent
 EFFECTIVENESS_EXCEL : Path = _START_DIR / "excels" / "effectiveness_combined.xlsx"
 EFFECTIVENESS_DIR   : Path = _START_DIR / "output" / "effectiveness_cache"
 JCC_OUTPUT_EXCEL    : Path = _START_DIR / "excels" / "jcc_output_layer.xlsx"
+JCC_EXTRACTED_MAPPED_EXCEL: Path = _START_DIR / "excels" / "jcc_extracted_mapped.xlsx"
 
 
 def run_jcc_output_layer(
@@ -485,6 +486,7 @@ def run_jcc_output_layer(
     effectiveness_df: pd.DataFrame | None = None,
     effectiveness_output_dir: Path | str | None = None,
     output_excel_path: Path | str | None = None,
+    mapped_output_excel_path: Path | str | None = None,
     match_threshold: float = 0.45,
 ) -> pd.DataFrame:
     """Produce the 4-column JCC output sheet (Developer Name, Substation, TGNA, GNA).
@@ -509,7 +511,13 @@ def run_jcc_output_layer(
     pd.DataFrame with columns: Developer Name, Substation, TGNA, GNA
     """
     xlsx_out = Path(output_excel_path).resolve() if output_excel_path else JCC_OUTPUT_EXCEL
+    mapped_xlsx_out = (
+        Path(mapped_output_excel_path).resolve()
+        if mapped_output_excel_path
+        else JCC_EXTRACTED_MAPPED_EXCEL
+    )
     xlsx_out.parent.mkdir(parents=True, exist_ok=True)
+    mapped_xlsx_out.parent.mkdir(parents=True, exist_ok=True)
 
     eff_excel = Path(effectiveness_excel_path).resolve() if effectiveness_excel_path else EFFECTIVENESS_EXCEL
     eff_dir   = Path(effectiveness_output_dir).resolve()  if effectiveness_output_dir else EFFECTIVENESS_DIR
@@ -630,6 +638,18 @@ def run_jcc_output_layer(
 
     df_out = pd.DataFrame(output_rows, columns=JCC_OUTPUT_COLUMNS)
 
+    mapped_columns = [
+        "GNA/ST II Application ID",
+        "LTA Application ID",
+        "Application ID under Enhancement 5.2 or revision",
+        "TGNA",
+        "GNA",
+    ]
+    mapped_rows = [
+        {col: row.get(col) for col in mapped_columns}
+        for row in output_rows
+    ]
+
     if output_rows:
         export_to_excel(
             rows         = output_rows,
@@ -644,6 +664,17 @@ def run_jcc_output_layer(
             ],
         )
         print(f"\n  ✓ JCC Output Excel → {xlsx_out}")
+
+        export_to_excel(
+            rows         = mapped_rows,
+            output_path  = mapped_xlsx_out,
+            sheet_name   = "JCC Extracted Mapped",
+            column_order = mapped_columns,
+            summary_rows = [
+                ("Rows", len(mapped_rows)),
+            ],
+        )
+        print(f"  ✓ JCC Extracted Mapped Excel → {mapped_xlsx_out}")
     else:
         print("\n  ⚠ No output rows — Excel not written.")
 

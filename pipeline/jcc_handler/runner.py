@@ -83,6 +83,7 @@ def run_jcc_extraction(
     effectiveness_excel_path: Path | str | None = None,
     effectiveness_output_dir: Path | str | None = None,
     jcc_output_excel_path: Path | str | None = None,
+    jcc_mapped_excel_path: Path | str | None = None,
     mapped_excel_path: Path | str | None = None,
     mapped_df: pd.DataFrame | None = None,
     layer4_excel_path: Path | str | None = None,
@@ -216,6 +217,7 @@ def run_jcc_extraction(
             effectiveness_df         = effectiveness_df,
             effectiveness_output_dir = effectiveness_output_dir,
             output_excel_path        = jcc_output_excel_path,
+            mapped_output_excel_path = jcc_mapped_excel_path,
         )
         print(f"\n[JCC] ✓ Output Layer complete — {len(jcc_output_df)} rows")
     except Exception as exc:
