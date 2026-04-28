@@ -7,30 +7,31 @@ PDF reports published by CTUIL for the Indian renewable energy sector.
 ## Data Flow
 
 ```
-../CTUIL-Regenerators-Effective-Date-wise/   ← Input: effectiveness PDFs
-    ├── Effective_Jan_2025.pdf                  (recursive scan)
+source/effectiveness_pdfs/           ← Input: effectiveness PDFs
+    ├── Effective_Jan_2025.pdf         (recursive scan)
     └── subdir/
         └── Effective_Feb_2025.pdf
 
           ↓  (pdfplumber + GPT-4o-mini)
 
-effectiveness_output/                        ← Cache: per-PDF JSON
+output/effectiveness_cache/          ← Cache: per-PDF JSON
     ├── Effective_Jan_2025.json
     └── Effective_Feb_2025.json
 
           ↓  (flatten + format)
 
-effectiveness_combined.xlsx                  ← Output: consolidated Excel
+excels/effectiveness_extracted.xlsx  ← Output: consolidated Excel
 ```
 
 ## Sub-Layer Architecture
 
-| File               | Responsibility                                     |
-|--------------------|----------------------------------------------------|
-| `prompts.py`       | LLM system & user prompt templates                 |
-| `models.py`        | Pydantic schema (`RERecord`), dedup, column order   |
-| `extraction.py`    | LLM extraction (primary) + pdfplumber fallback      |
-| `runner.py`        | Orchestration: discover → cache → extract → Excel   |
+| File               | Role | Type |
+|--------------------|------|------|
+| `prompts.py`       | LLM system & user prompt templates | Extraction |
+| `models.py`        | Pydantic schema (`RERecord`), dedup, column order | Schema |
+| `extraction.py`    | LLM extraction (primary) + pdfplumber fallback | Extraction |
+| `runner.py`        | Orchestration: discover → cache → extract → Excel | I/O |
+| `date_updater.py`  | **Logic**: GNA date comparison (effectiveness vs CMETS) | Logic |
 
 ## How Extraction Works
 
@@ -38,7 +39,7 @@ effectiveness_combined.xlsx                  ← Output: consolidated Excel
    Recursively scans the source folder for `*.pdf` files.
 
 2. **Cache Check** (`runner.py`):
-   If `effectiveness_output/<stem>.json` already exists, the PDF
+   If `effectiveness_cache/<stem>.json` already exists, the PDF
    is skipped. Delete the JSON to force re-extraction.
 
 3. **LLM Extraction** (`extraction.py → extract_with_llm()`):
@@ -54,9 +55,36 @@ effectiveness_combined.xlsx                  ← Output: consolidated Excel
 5. **Deduplication** (`models.py → dedup_records()`):
    Records are deduplicated by `application_id + name_of_applicant`.
 
-## How to Change Extraction Logic
+## Logic: GNA Date Updater (`date_updater.py`)
 
-- **Add/remove output columns**: Edit `models.py` → `RERecord`
+This file contains a **standalone logic operation** (not extraction).
+It is called by **Module 3** (mapping handler) after the merge step.
+
+### What it does
+
+For each CMETS row matched to an effectiveness record:
+1. Parses effectiveness `expected_date`
+   (= "expected date of connectivity / GNA to be made effective")
+2. Parses CMETS `GNA Operationalization Date`
+3. If effectiveness date > CMETS date → updates CMETS column with the later date
+4. If CMETS date ≥ effectiveness date → keeps CMETS date as-is
+5. If CMETS date is empty → uses effectiveness date
+6. Recomputes `GNA Operationalization (Yes/No)`:
+   - "Yes" → date is in the future
+   - "No" → date is today or in the past
+
+### Key functions
+
+| Function | Purpose |
+|----------|---------|
+| `update_gna_dates(df, lookup)` | Main entry — compares dates, updates columns |
+| `parse_date(raw)` | Parses date strings in dd.mm.yyyy / yyyy-mm-dd / "d Month yyyy" |
+| `_yes_no(d)` | Future → "Yes", past → "No" |
+
+## How to Change
+
+- **Add/remove columns**: Edit `models.py → RERecord`
 - **Change LLM instructions**: Edit `prompts.py`
 - **Change chunking / retry strategy**: Edit `extraction.py`
-- **Change fallback table header mapping**: Edit `extraction.py` → `_HEADER_MAP`
+- **Change fallback table header mapping**: Edit `extraction.py → _HEADER_MAP`
+- **Change date comparison logic**: Edit `date_updater.py → update_gna_dates()`

@@ -2,15 +2,16 @@
 
 ## Purpose
 Merges **CMETS data** (from Module 1) with **Effectiveness data** (from Module 2)
-to produce an enriched output with region, capacity breakdowns, and developer details.
+to produce an enriched output with region, capacity breakdowns, developer details,
+and updated GNA Operationalization dates.
 
 ## Data Flow
 
 ```
-cmets.xlsx                          ← Input: from Module 1
-effectiveness_output/*.json         ← Input: from Module 2 (JSON cache)
+cmets_extracted.xlsx                ← Input: from Module 1
+output/effectiveness_cache/*.json   ← Input: from Module 2 (JSON cache)
 
-          ↓  (lookup build + row-by-row merge)
+          ↓  (lookup build + row-by-row merge + date update)
 
 effectiveness_mapped.json           ← Output: merged JSON (for downstream)
 effectiveness_mapped.xlsx           ← Output: formatted Excel report
@@ -18,40 +19,55 @@ effectiveness_mapped.xlsx           ← Output: formatted Excel report
 
 ## Sub-Layer Architecture
 
-| File               | Responsibility                                     |
-|--------------------|----------------------------------------------------|
-| `lookup.py`        | Builds `application_id → record` lookup dictionary  |
-| `merge.py`         | Row-by-row merge logic, enrichment column population |
-| `formatting.py`    | Professional Excel styling (colours, borders, etc.)  |
-| `runner.py`        | Orchestration: load → lookup → merge → JSON + Excel  |
+| File               | Role | Type |
+|--------------------|------|------|
+| `lookup.py`        | Builds `application_id → record` lookup dictionary | Logic |
+| `merge.py`         | Row-by-row merge logic, enrichment column population | Logic |
+| `formatting.py`    | Professional Excel styling (colours, borders, etc.) | Formatting |
+| `runner.py`        | Orchestration: load → lookup → merge → date-update → JSON + Excel | I/O |
 
-## How Mapping Works
+**External dependency**: `date_updater.py` from `effectiveness_handler` (called after merge)
 
-1. **Lookup Build** (`lookup.py → build_lookup()`):
-   - Seeds from the in-memory DataFrame (Module 2's current run)
-   - Supplements/overrides with all on-disk JSON cache files
-   - Result: `{application_id: record_dict}` dictionary
+## Processing Pipeline
 
-2. **ID Matching** (`merge.py → merge_rows()`):
-   For each CMETS row:
-   - **Primary match**: Extract IDs from `GNA/ST II Application ID`
-     and look them up in the effectiveness dict
-   - **Fallback match**: If no primary match, try `LTA Application ID`
-   - If matched, update existing columns (developer name, substation,
-     state, quantum) and populate new enrichment columns
+```
+Step 1: Build lookup dict (application_id → record)       [lookup.py]
+Step 2: Load CMETS Excel                                   [runner.py]
+Step 3: Row-by-row merge (GNA ID → LTA ID fallback)        [merge.py]
+   └→ Update: developer name, substation, state, quantum
+   └→ Add: Region, Type of Project, capacity breakdowns
+Step 4: GNA Operationalization Date update                  [date_updater.py]
+   └→ Compare eff expected_date vs CMETS GNA Op Date
+   └→ Update to later date + recompute Yes/No
+Step 5: Dump JSON                                           [runner.py]
+Step 6: Write formatted Excel                               [runner.py + formatting.py]
+```
 
-3. **Enrichment Columns** (added by `merge.py`):
-   - `Region`
-   - `Type of Project`
-   - `Installed capacity (MW) solar / wind / ess / hydro / hybrid`
+## Logic Operations
 
-4. **Output** (`runner.py`):
-   - `effectiveness_mapped.json` — full merged data + match statistics
-   - `effectiveness_mapped.xlsx` — formatted Excel with frozen header
+### Step 1 — Lookup Build (`lookup.py → build_lookup()`)
+- Seeds from the in-memory DataFrame (Module 2's current run)
+- Supplements/overrides with all on-disk JSON cache files
+- Result: `{application_id: record_dict}` dictionary
 
-## How to Change Mapping Logic
+### Step 3 — Row Merge (`merge.py → merge_rows()`)
+For each CMETS row:
+- **Primary match**: Extract IDs from `GNA/ST II Application ID` → look up
+- **Fallback match**: If no primary match → try `LTA Application ID`
+- If matched: update developer name, substation, state, quantum
+- Add enrichment columns: Region, Type of Project, installed capacity breakdowns
 
-- **Change matching strategy**: Edit `merge.py` → `merge_rows()`
-- **Add/remove enrichment columns**: Edit `merge.py` → `NEW_COLUMNS`, `_EFF_FIELD_TO_COL`
-- **Change lookup source priority**: Edit `lookup.py` → `build_lookup()`
+### Step 4 — GNA Date Update (`date_updater.py → update_gna_dates()`)
+For each matched CMETS row:
+- Parse effectiveness `expected_date` (connectivity/GNA to be made effective)
+- Parse CMETS `GNA Operationalization Date`
+- If eff date > CMETS date → update to effectiveness date
+- Recompute `GNA Operationalization (Yes/No)` based on new date
+
+## How to Change
+
+- **Change matching strategy**: Edit `merge.py → merge_rows()`
+- **Add/remove enrichment columns**: Edit `merge.py → NEW_COLUMNS`, `_EFF_FIELD_TO_COL`
+- **Change lookup source priority**: Edit `lookup.py → build_lookup()`
+- **Change date comparison logic**: Edit `effectiveness_handler/date_updater.py`
 - **Change Excel styling**: Edit `formatting.py`

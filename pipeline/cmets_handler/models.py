@@ -56,6 +56,10 @@ class PipelineResult(BaseModel):
 # Column order for cmets.xlsx
 CMETS_COLUMNS = [
     "PDF", "Page Number",
+    # ── Meeting-level metadata (same for all rows from same PDF) ──
+    "CMETS GNA Approved", "CMETS LTA Approved",
+    "CMETS GNA Meeting Date", "CMETS LTA Meeting Date",
+    # ── Row-level extracted data ──
     "Project Location", "State", "substaion", "Name of the developers",
     "type",
     "GNA/ST II Application ID", "LTA Application ID",

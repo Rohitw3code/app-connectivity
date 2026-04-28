@@ -23,6 +23,7 @@ from config import RuntimeConfig, load_runtime_config
 from pipeline.excel_utils import export_to_excel
 from pipeline.cmets_handler.models import PipelineResult, CMETS_COLUMNS
 from pipeline.cmets_handler.extraction import run_single_pdf
+from pipeline.cmets_handler.meeting_classifier import classify_meeting
 
 logger = logging.getLogger(__name__)
 
@@ -35,10 +36,12 @@ CMETS_EXCEL : Path = _START_DIR / "excels" / "cmets.xlsx"
 
 # ─── Serialisation ────────────────────────────────────────────────────────────
 
-def _serialize(result: PipelineResult) -> dict:
+def _serialize(result: PipelineResult, meeting_meta: dict | None = None) -> dict:
     out = result.model_dump()
     for i, pr in enumerate(out["results"]):
         pr["rows"] = [r.model_dump(by_alias=True) for r in result.results[i].rows]
+    if meeting_meta:
+        out["meeting_meta"] = meeting_meta
     return out
 
 
@@ -53,17 +56,31 @@ def _load_json(path: Path) -> dict:
         return json.load(fh)
 
 
+# Meeting-level columns that are injected from meeting_meta (same for all rows per PDF)
+_MEETING_COLS = [
+    "CMETS GNA Approved", "CMETS LTA Approved",
+    "CMETS GNA Meeting Date", "CMETS LTA Meeting Date",
+]
+
+
 def _flatten(all_serialized: list[dict]) -> list[dict]:
     """Flatten nested per-PDF results into flat rows for Excel."""
     records = []
     for pr in all_serialized:
         pdf_path = pr.get("pdf_path", "")
+        # Meeting-level metadata (same for every row from this PDF)
+        meeting = pr.get("meeting_meta") or {}
         for page in pr.get("results", []):
             pnum = page.get("page_number")
             for row in page.get("rows", []):
                 rec = {"PDF": pdf_path, "Page Number": pnum}
-                for col in CMETS_COLUMNS[2:]:
-                    rec[col] = row.get(col)
+                # Inject meeting columns
+                for mcol in _MEETING_COLS:
+                    rec[mcol] = meeting.get(mcol)
+                # Row-level columns
+                for col in CMETS_COLUMNS:
+                    if col not in rec:  # skip PDF, Page, meeting cols already set
+                        rec[col] = row.get(col)
                 rec["Applied Start of Connectivity sought by developer date"
                     "( start date of connectivity as per the application)"] = (
                     row.get("Applied Start of Connectivity sought by developer date")
@@ -145,13 +162,24 @@ def run_cmets_extraction(
 
         print(f"\n[{idx}/{len(pdf_paths)}] EXTRACT {pdf_path.name}")
         print("-" * 64)
+
+        # ── Pre-extraction: classify meeting type (GNA / LTA) ─────────
+        print(f"  [M] Classifying meeting type …", end=" ", flush=True)
+        meeting_meta = classify_meeting(str(pdf_path))
+        print(
+            f"#{meeting_meta.meeting_number or '?'} "
+            f"({meeting_meta.meeting_date or 'no date'}) → "
+            f"{meeting_meta.classification} "
+            f"(GNA:{meeting_meta.gna_count} LTA:{meeting_meta.lta_count})"
+        )
+
         result = run_single_pdf(
             pdf_path=str(pdf_path),
             api_key=runtime.api_key or None,
             vm_mode=runtime.vm_mode,
             llm_script_path=runtime.llm_script_path,
         )
-        data = _serialize(result)
+        data = _serialize(result, meeting_meta=meeting_meta.as_row_dict())
         _save_json(data, cache)
         print(f"  → JSON: {cache.name}")
         all_data.append(data)
