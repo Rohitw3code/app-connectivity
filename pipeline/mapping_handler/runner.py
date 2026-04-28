@@ -22,6 +22,7 @@ import pandas as pd
 from pipeline.mapping_handler.lookup import build_lookup
 from pipeline.mapping_handler.merge import merge_rows
 from pipeline.mapping_handler.formatting import format_mapped_excel
+from pipeline.effectiveness_handler.date_updater import update_gna_dates
 
 logger = logging.getLogger(__name__)
 
@@ -92,6 +93,19 @@ def run_mapping(
         f"Unmatched: {stats['unmatched']} | "
         f"Total: {stats['total_rows']}"
     )
+
+    # GNA Operationalization Date update
+    # Compare effectiveness expected_date with CMETS GNA Operationalization Date
+    # and update to the later value when effectiveness is newer.
+    if lookup:
+        enriched_df, date_stats = update_gna_dates(enriched_df, lookup)
+        print(
+            f"[Mapping] GNA Date Update: "
+            f"Matched: {date_stats['matched']} | "
+            f"Updated: {date_stats['updated_date']} | "
+            f"Kept same: {date_stats['kept_same']} | "
+            f"No eff date: {date_stats['no_eff_date']}"
+        )
 
     # Dump JSON
     mapped_records = enriched_df.to_dict(orient="records")
