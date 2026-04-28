@@ -10,9 +10,11 @@ Pipeline Steps
 --------------
   Step 1 — Load effectiveness output sheet (substation + developer name)
   Step 2 — Load all extracted JCC JSON data (flattened rows)
-  Step 3 — For each effectiveness row, fuzzy-match to a JCC row
-           using  substation ↔ pooling_station
-           and    developer  ↔ connectivity_applicant
+    Step 3 — For each effectiveness row, match to a JCC row using
+                     GNA/LTA/Enhancement 5.2 application IDs when available.
+                     If no IDs are present, fallback to fuzzy match:
+                         substation ↔ pooling_station
+                         developer  ↔ connectivity_applicant
   Step 4 — From the matched JCC row, compute GNA and TGNA:
              GNA  = sum of Generation (MW) when status is "Effective"
              TGNA = sum of Commissioned MW when status is NOT "Effective"
@@ -74,7 +76,7 @@ def load_effectiveness_data(
     effectiveness_df: pd.DataFrame | None = None,
     effectiveness_output_dir: Path | str | None = None,
 ) -> list[dict]:
-    """Load effectiveness records containing substation + developer name.
+    """Load effectiveness records containing substation/developer or IDs.
 
     Priority:
       1. Pre-loaded DataFrame (from Module 2/3 in the same run)
@@ -83,6 +85,7 @@ def load_effectiveness_data(
 
     Returns a list of dicts, each with at least:
         { "substation": "...", "name_of_applicant": "..." }
+    or application ID columns such as GNA/LTA/Enhancement 5.2.
     """
     records: list[dict] = []
 
@@ -123,12 +126,13 @@ def load_effectiveness_data(
 
 
 def _filter_valid(records: list[dict]) -> list[dict]:
-    """Keep only records that have at least a substation or developer name."""
+    """Keep records that have substation/developer or any application ID."""
     valid = []
     for rec in records:
         substation = _safe_str(rec.get("substation"))
         developer  = _safe_str(rec.get("name_of_applicant"))
-        if substation or developer:
+        id_values = _collect_ids_from_record(rec)
+        if substation or developer or id_values:
             valid.append(rec)
     return valid
 
@@ -159,7 +163,7 @@ def flatten_jcc_data(all_results: list[dict]) -> list[dict]:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# STEP 3 — Fuzzy Matching (Substation + Developer Name)
+# STEP 3 — ID Matching + Fuzzy Fallback (Substation + Developer Name)
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _safe_str(val) -> str:
@@ -192,24 +196,105 @@ def _substring_match(needle: str, haystack: str) -> bool:
     return nn in nh or nh in nn
 
 
+def _split_ids(raw) -> list[str]:
+    """Split a cell containing one or more application IDs."""
+    if raw is None:
+        return []
+    text = str(raw).strip()
+    if not text:
+        return []
+    parts = [p.strip() for p in re.split(r"[;,|\n]+", text) if p.strip()]
+    return parts if parts else [text]
+
+
+def _normalize_id(text: str) -> str:
+    """Normalize an application ID for substring matching."""
+    if not text:
+        return ""
+    norm = _normalize(text)
+    return re.sub(r"[^a-z0-9/\-]", "", norm)
+
+
+def _collect_ids_from_record(record: dict) -> list[str]:
+    """Collect candidate application IDs from a record (case-insensitive keys)."""
+    if not record:
+        return []
+
+    key_map = {k.lower(): k for k in record.keys()}
+    candidates = [
+        "gna application no",
+        "gna application id",
+        "gna/st ii application id",
+        "gna st ii application id",
+        "lta application id",
+        "lta application no",
+        "lta no",
+        "application id under enhancement 5.2 or revision",
+        "application id under enhancement 5.2",
+        "enhancement 5.2 application id",
+        "application_id",
+        "application id",
+    ]
+
+    ids: list[str] = []
+    for cand in candidates:
+        key = key_map.get(cand)
+        if key:
+            ids.extend(_split_ids(record.get(key)))
+
+    seen: set[str] = set()
+    out: list[str] = []
+    for item in ids:
+        norm = _normalize_id(item)
+        if not norm or norm in seen:
+            continue
+        seen.add(norm)
+        out.append(item)
+    return out
+
+
+def _row_id_match_count(row: dict, ids: list[str]) -> int:
+    """Count how many IDs are found in any value of the JCC row."""
+    if not row or not ids:
+        return 0
+    normalized_values = [_normalize_id(v) for v in row.values() if v is not None]
+    count = 0
+    for candidate in ids:
+        cid = _normalize_id(candidate)
+        if len(cid) < 3:
+            continue
+        if any(cid in value for value in normalized_values if value):
+            count += 1
+    return count
+
+
 def find_best_jcc_match(
     substation: str,
     developer_name: str,
     jcc_rows: list[dict],
+    id_values: list[str] | None = None,
     threshold: float = 0.45,
 ) -> Optional[dict]:
-    """Find the JCC row that best matches (substation, developer_name).
+    """Find the JCC row that best matches given IDs or (substation, developer_name).
 
-    Matching strategy (weighted):
-      • substation    ↔ pooling_station        (weight 0.5)
-      • developer     ↔ connectivity_applicant (weight 0.5)
+    Matching strategy (priority order):
+      1) Application IDs (GNA/LTA/Enhancement 5.2) across any JCC row value
+      2) Weighted fuzzy match:
+           substation    ↔ pooling_station        (weight 0.5)
+           developer     ↔ connectivity_applicant (weight 0.5)
 
     A substring containment match gets a bonus of +0.15 on that dimension.
 
     Returns the best-matching JCC row dict, or None if below threshold.
     """
-    best_match: Optional[dict] = None
-    best_score: float = 0.0
+    best_id_match: Optional[dict] = None
+    best_id_hits: int = 0
+    best_id_fuzzy: float = 0.0
+
+    best_fuzzy_match: Optional[dict] = None
+    best_fuzzy_score: float = 0.0
+
+    ids = id_values or []
 
     for row in jcc_rows:
         pooling   = _safe_str(row.get("pooling_station"))
@@ -226,12 +311,18 @@ def find_best_jcc_match(
             dev_score = min(1.0, dev_score + 0.15)
 
         combined = 0.5 * sub_score + 0.5 * dev_score
+        id_hits = _row_id_match_count(row, ids)
+        if id_hits > 0:
+            if id_hits > best_id_hits or (id_hits == best_id_hits and combined > best_id_fuzzy):
+                best_id_hits = id_hits
+                best_id_fuzzy = combined
+                best_id_match = row
 
-        if combined > best_score and combined >= threshold:
-            best_score = combined
-            best_match = row
+        if combined > best_fuzzy_score and combined >= threshold:
+            best_fuzzy_score = combined
+            best_fuzzy_match = row
 
-    return best_match
+    return best_id_match or best_fuzzy_match
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -416,7 +507,7 @@ def run_jcc_output_layer(
         effectiveness_df         = effectiveness_df,
         effectiveness_output_dir = eff_dir,
     )
-    print(f"           {len(eff_records)} effectiveness records with substation/developer")
+    print(f"           {len(eff_records)} effectiveness records with substation/developer/IDs")
 
     if not eff_records:
         print("  ⚠ No effectiveness records found — cannot produce JCC output.")
@@ -443,8 +534,9 @@ def run_jcc_output_layer(
     for eff_rec in eff_records:
         substation = _safe_str(eff_rec.get("substation"))
         developer  = _safe_str(eff_rec.get("name_of_applicant"))
+        id_values  = _collect_ids_from_record(eff_rec)
 
-        if not substation and not developer:
+        if not substation and not developer and not id_values:
             continue
 
         # Fuzzy match
@@ -452,6 +544,7 @@ def run_jcc_output_layer(
             substation     = substation,
             developer_name = developer,
             jcc_rows       = jcc_rows,
+            id_values      = id_values,
             threshold      = match_threshold,
         )
 
@@ -533,10 +626,11 @@ def find_strict_jcc_match(
     substation: str,
     developer_name: str,
     jcc_rows: list[dict],
+    id_values: list[str] | None = None,
     sub_threshold: float = 0.40,
     dev_threshold: float = 0.40,
 ) -> Optional[dict]:
-    """Find the best JCC row where BOTH substation AND developer match.
+    """Find the best JCC row where IDs match, else BOTH substation AND developer match.
 
     Unlike find_best_jcc_match (which uses a combined score),
     this function requires BOTH dimensions to independently exceed
@@ -559,11 +653,17 @@ def find_strict_jcc_match(
     -------
     Best matching JCC row dict, or None if no row passes both thresholds.
     """
-    if not substation and not developer_name:
+    if not substation and not developer_name and not (id_values or []):
         return None
+
+    best_id_match: Optional[dict] = None
+    best_id_hits: int = 0
+    best_id_fuzzy: float = 0.0
 
     best_match: Optional[dict] = None
     best_combined: float = 0.0
+
+    ids = id_values or []
 
     for row in jcc_rows:
         pooling   = _safe_str(row.get("pooling_station"))
@@ -579,16 +679,25 @@ def find_strict_jcc_match(
         if _substring_match(developer_name, applicant):
             dev_score = min(1.0, dev_score + 0.15)
 
+        combined = sub_score + dev_score
+
+        # ID-based match (priority)
+        id_hits = _row_id_match_count(row, ids)
+        if id_hits > 0:
+            if id_hits > best_id_hits or (id_hits == best_id_hits and combined > best_id_fuzzy):
+                best_id_hits = id_hits
+                best_id_fuzzy = combined
+                best_id_match = row
+
         # BOTH must independently pass their thresholds
         if sub_score < sub_threshold or dev_score < dev_threshold:
             continue
 
-        combined = sub_score + dev_score
         if combined > best_combined:
             best_combined = combined
             best_match = row
 
-    return best_match
+    return best_id_match or best_match
 
 
 def run_layer4_excel(
@@ -605,8 +714,8 @@ def run_layer4_excel(
     Takes the FULL Module 3 mapped output (CMETS × Effectiveness) and
     enriches it with GNA and TGNA values from JCC data.
 
-    Matching requires BOTH developer name AND substation to match
-    (each must independently exceed its fuzzy threshold).
+    Matching prioritizes GNA/LTA/Enhancement 5.2 IDs when available,
+    else requires BOTH developer name AND substation to match.
 
     Parameters
     ----------
@@ -665,10 +774,16 @@ def run_layer4_excel(
         print("=" * 64)
         return df
 
-    # ── Identify developer name + substation columns ──────────────────────
+    # ── Identify developer name + substation + ID columns ────────────────
     col_dev  = _find_col(df, "Name of the developers", "Name of developers",
                          "Developer Name", "name_of_applicant")
     col_sub  = _find_col(df, "substaion", "Substation", "substation")
+    col_gna  = _find_col(df, "GNA/ST II Application ID", "GNA ST II Application ID",
+                         "GNA Application ID", "GNA Application No")
+    col_lta  = _find_col(df, "LTA Application ID", "LTA Application No", "LTA No")
+    col_52   = _find_col(df, "Application ID under Enhancement 5.2 or revision",
+                         "Application ID under Enhancement 5.2",
+                         "Enhancement 5.2 Application ID")
 
     if not col_dev:
         print("  ⚠ Cannot find developer name column in mapped data.")
@@ -677,6 +792,9 @@ def run_layer4_excel(
 
     print(f"  Developer col: {col_dev}")
     print(f"  Substation col: {col_sub}")
+    print(f"  GNA ID col: {col_gna}")
+    print(f"  LTA ID col: {col_lta}")
+    print(f"  5.2 ID col: {col_52}")
     print("-" * 64)
 
     # ── Match each row and compute GNA / TGNA ─────────────────────────────
@@ -690,8 +808,15 @@ def run_layer4_excel(
     for idx, row in df.iterrows():
         developer  = _safe_str(row.get(col_dev)) if col_dev else ""
         substation = _safe_str(row.get(col_sub)) if col_sub else ""
+        id_values: list[str] = []
+        if col_gna:
+            id_values.extend(_split_ids(row.get(col_gna)))
+        if col_lta:
+            id_values.extend(_split_ids(row.get(col_lta)))
+        if col_52:
+            id_values.extend(_split_ids(row.get(col_52)))
 
-        if not developer and not substation:
+        if not developer and not substation and not id_values:
             gna_values.append(None)
             tgna_values.append(None)
             continue
@@ -701,6 +826,7 @@ def run_layer4_excel(
             substation     = substation,
             developer_name = developer,
             jcc_rows       = jcc_rows,
+            id_values      = id_values,
             sub_threshold  = sub_threshold,
             dev_threshold  = dev_threshold,
         )
