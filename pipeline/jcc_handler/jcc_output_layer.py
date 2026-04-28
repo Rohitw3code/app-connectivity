@@ -62,6 +62,9 @@ logger = logging.getLogger(__name__)
 JCC_OUTPUT_COLUMNS = [
     "Developer Name",
     "Substation",
+    "GNA/ST II Application ID",
+    "LTA Application ID",
+    "Application ID under Enhancement 5.2 or revision",
     "TGNA",
     "GNA",
 ]
@@ -266,6 +269,21 @@ def _row_id_match_count(row: dict, ids: list[str]) -> int:
         if any(cid in value for value in normalized_values if value):
             count += 1
     return count
+
+
+def _get_record_value(record: dict, *candidate_keys: str) -> str:
+    """Return the first non-empty value for a list of candidate keys."""
+    if not record:
+        return ""
+    key_map = {k.lower(): k for k in record.keys()}
+    for cand in candidate_keys:
+        key = key_map.get(cand.lower())
+        if not key:
+            continue
+        value = _safe_str(record.get(key))
+        if value:
+            return value
+    return ""
 
 
 def find_best_jcc_match(
@@ -535,6 +553,27 @@ def run_jcc_output_layer(
         substation = _safe_str(eff_rec.get("substation"))
         developer  = _safe_str(eff_rec.get("name_of_applicant"))
         id_values  = _collect_ids_from_record(eff_rec)
+        gna_id = _get_record_value(
+            eff_rec,
+            "GNA/ST II Application ID",
+            "GNA ST II Application ID",
+            "GNA Application ID",
+            "GNA Application No",
+            "GNA Application No.",
+        )
+        lta_id = _get_record_value(
+            eff_rec,
+            "LTA Application ID",
+            "LTA Application No",
+            "LTA Application No.",
+            "LTA No",
+        )
+        enhancement_id = _get_record_value(
+            eff_rec,
+            "Application ID under Enhancement 5.2 or revision",
+            "Application ID under Enhancement 5.2",
+            "Enhancement 5.2 Application ID",
+        )
 
         if not substation and not developer and not id_values:
             continue
@@ -553,6 +592,9 @@ def run_jcc_output_layer(
             output_rows.append({
                 "Developer Name": developer,
                 "Substation":     substation,
+                "GNA/ST II Application ID": gna_id,
+                "LTA Application ID": lta_id,
+                "Application ID under Enhancement 5.2 or revision": enhancement_id,
                 "TGNA":           None,
                 "GNA":            None,
             })
@@ -571,6 +613,9 @@ def run_jcc_output_layer(
         output_rows.append({
             "Developer Name": developer or _safe_str(jcc_match.get("connectivity_applicant")),
             "Substation":     substation or _safe_str(jcc_match.get("pooling_station")),
+            "GNA/ST II Application ID": gna_id,
+            "LTA Application ID": lta_id,
+            "Application ID under Enhancement 5.2 or revision": enhancement_id,
             "TGNA":           tgna_val,
             "GNA":            gna_val,
         })
