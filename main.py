@@ -13,10 +13,11 @@ Missing input/output folders are created automatically.
 
 Modules
 -------
-  Module 1 (pipeline/cmets_handler/)         — CMETS PDF extraction
-  Module 2 (pipeline/effectiveness_handler/) — Effectiveness PDF extraction
-  Module 3 (pipeline/mapping_handler/)       — CMETS × Effectiveness merge
-  Module 4 (pipeline/jcc_handler/)           — JCC Meeting PDF extraction
+  Module 1 (pipeline/cmets_handler/)              — CMETS PDF extraction
+  Module 2 (pipeline/effectiveness_handler/)      — Effectiveness PDF extraction
+  Module 3 (pipeline/mapping_handler/)            — CMETS × Effectiveness merge
+  Module 4 (pipeline/jcc_handler/)                — JCC Meeting PDF extraction
+  Module 5 (pipeline/bayallocation_handler/)      — Bay Allocation PDF extraction
 """
 
 from __future__ import annotations
@@ -33,6 +34,7 @@ from pipeline.cmets_handler         import run_cmets_extraction
 from pipeline.effectiveness_handler import run_effectiveness_extraction
 from pipeline.mapping_handler       import run_mapping
 from pipeline.jcc_handler           import run_jcc_extraction
+from pipeline.bayallocation_handler import run_bayallocation_extraction
 
 logging.basicConfig(
     level=logging.INFO,
@@ -51,6 +53,8 @@ REQUIRED_FOLDERS = [
     (_START_DIR / "output" / "cmets_cache",           "CMETS JSON cache"),
     (_START_DIR / "output" / "effectiveness_cache",   "Effectiveness JSON cache"),
     (_START_DIR / "output" / "jcc_cache",             "JCC JSON cache"),
+    (_START_DIR / "source" / "bayallocation",          "Bay Allocation PDF input"),
+    (_START_DIR / "output" / "bayallocation_cache",    "Bay Allocation JSON cache"),
     (_START_DIR / "excels",                           "Generated Excel reports"),
 ]
 
@@ -90,6 +94,10 @@ def _build_args() -> argparse.Namespace:
                    help="JCC PDF folder                 (default: source/jcc_pdfs/)")
     p.add_argument("--jcc-output-dir",   default=None, metavar="DIR",
                    help="JCC JSON cache folder          (default: output/jcc_cache/)")
+    p.add_argument("--bay-source-dir",   default=None, metavar="DIR",
+                   help="Bay Allocation PDF folder      (default: source/bayallocation/)")
+    p.add_argument("--bay-output-dir",   default=None, metavar="DIR",
+                   help="Bay Allocation JSON cache      (default: output/bayallocation_cache/)")
     p.add_argument("--skip-effectiveness", action="store_true",
                    help="Run Module 1 only; skip Modules 2, 3, 4")
     p.add_argument("--mode",             choices=["vm", "laptop"], default=None,
@@ -186,6 +194,19 @@ def main() -> None:
         print(f"\n[Pipeline] ✓ Module 4 complete — {len(jcc_df)} rows\n")
     except Exception:
         logging.error("Module 4 failed.")
+        traceback.print_exc()
+
+    # ── Module 5: Bay Allocation extraction ──────────────────────────────
+    try:
+        bay_df = run_bayallocation_extraction(
+            source_dir = args.bay_source_dir,
+            output_dir = args.bay_output_dir,
+            excel_path = str(excels_dir / "bayallocation_extracted.xlsx"),
+            runtime    = runtime,
+        )
+        print(f"\n[Pipeline] ✓ Module 5 complete — {len(bay_df)} entries\n")
+    except Exception:
+        logging.error("Module 5 failed.")
         traceback.print_exc()
 
     print("=" * 64)

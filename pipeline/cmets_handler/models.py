@@ -18,6 +18,7 @@ class MappedRow(BaseModel):
     project_location:   Optional[str] = Field(None, alias="Project Location")
     state:              Optional[str] = Field(None, alias="State")
     substaion:          Optional[str] = Field(None, alias="substaion")
+    voltage:            Optional[str] = Field(None, alias="Voltage")
     name_of_developers: Optional[str] = Field(None, alias="Name of the developers")
     type:               Optional[str] = Field(None, alias="type")
     gna_st2_id:         Optional[str] = Field(None, alias="GNA/ST II Application ID")
@@ -60,7 +61,8 @@ CMETS_COLUMNS = [
     "CMETS GNA Approved", "CMETS LTA Approved",
     "CMETS GNA Meeting Date", "CMETS LTA Meeting Date",
     # ── Row-level extracted data ──
-    "Project Location", "State", "substaion", "Name of the developers",
+    "Project Location", "State", "substaion", "Voltage",
+    "Name of the developers",
     "type",
     "GNA/ST II Application ID", "LTA Application ID",
     "Application ID under Enhancement 5.2 or revision",

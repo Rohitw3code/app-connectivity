@@ -23,6 +23,10 @@ from pipeline.cmets_handler.prompts import SYSTEM_PROMPT, USER_TEMPLATE
 from pipeline.cmets_handler.gate import page_passes_gate
 from pipeline.cmets_handler.models import MappedRow, PageResult, PipelineResult
 from pipeline.cmets_handler.normalization import validate_rows, normalize, dedup_dicts
+from pipeline.cmets_handler.voltage_extractor import (
+    extract_voltage_from_row,
+    extract_voltage_from_page,
+)
 
 
 # ── Sub-layer A: PDF page extraction ──────────────────────────────────────────
@@ -130,6 +134,21 @@ def run_single_pdf(
         validated  = validate_rows(raw_rows)
         normalized = normalize(validated)
         print(f"         → {len(normalized)} normalised rows")
+
+        # Sub-layer V: Contextual voltage extraction (per row)
+        # Primary: LLM-provided Voltage field + row cell scan (substation, location…)
+        # Fallback: page-level voltage if row gives nothing
+        page_voltage = extract_voltage_from_page(text)
+        injected: list[MappedRow] = []
+        for row in normalized:
+            d = row.model_dump(by_alias=True)
+            row_voltage = extract_voltage_from_row(d) or page_voltage
+            d["Voltage"] = row_voltage
+            injected.append(MappedRow.model_validate(d))
+        normalized = injected
+
+        if page_voltage:
+            print(f"  [V] Page {pnum}: page-level voltage → {page_voltage}")
 
         results.append(PageResult(page_number=pnum, rows_found=len(normalized), rows=normalized))
 

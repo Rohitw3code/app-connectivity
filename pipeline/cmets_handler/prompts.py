@@ -38,6 +38,7 @@ Output keys for each row:
  17) PSP MWh
  18) PSP Injection (MW)
  19) PSP Drawl (MW)
+ 20) Voltage
 
 ═══════════════════════════════════════════════════════
 COLUMN DETECTION — HEADER NAME MAPPING
@@ -74,6 +75,13 @@ Use these mapping rules to determine which output key a column maps to:
 - GNA Operationalization (Yes/No) <- derived post-processing; return null here
 - Status of application(Withdrawn / granted. Revoked.) <- status wording in description
 - PSP MWh / PSP Injection (MW) / PSP Drawl (MW) <- only when pump storage / PSP present
+- Voltage <- voltage level of the substation/connectivity point, e.g. "400 kV", "765 kV",
+             "220 kV", "132 kV", "66 kV", "33 kV".
+             Extract from:
+               • the substation column value (e.g. "Aligarh 400kV (PG)")
+               • the row's project location or description ("at 400 kV level")
+               • the table header/title if it mentions a voltage
+             Return as "<number> kV" (e.g. "400 kV"). Return null if not found.
 
 ═══════════════════════════════════════════════════════
 COLUMN DETECTION — VALUE-BASED FINGERPRINTS
@@ -93,6 +101,10 @@ CHARACTERISTIC VALUES:
 
 • type values look like:
     Solar, Solar + BESS, Hybrid, Hybrid + BESS, BESS, Hydro, Hydro+BESS
+
+• Voltage values look like:
+    400 kV, 765 kV, 220 kV, 132 kV, 66 kV, 33 kV
+    (look in substation cell or table title for the voltage level)
 
 • GNA/ST II Application ID values look like:
     2200001981, 1200003683, 1200003740  (10-digit IDs starting with 12/22/11)
@@ -160,7 +172,8 @@ Return JSON in EXACTLY this shape:
             "Status of application(Withdrawn / granted. Revoked.)": "granted",
             "PSP MWh": null,
             "PSP Injection (MW)": null,
-            "PSP Drawl (MW)": null
+            "PSP Drawl (MW)": null,
+            "Voltage": "400 kV"
         }}
     ]
 }}

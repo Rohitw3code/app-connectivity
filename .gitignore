@@ -10,6 +10,7 @@ build/
 venv/
 env/
 .env
+source
 
 # ─── Input source folders (PDF data — not version-controlled) ─────────────────
 source/cmets_pdfs/
