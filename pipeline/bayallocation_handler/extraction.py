@@ -4,6 +4,9 @@ bayallocation_handler/extraction.py -- PDF table extraction logic
 Uses pdfplumber to extract the bay-allocation table from each page of the
 Bay Allocation PDF.  Each page is treated as one independent extraction unit.
 
+The handler receives a **single page** and extracts only the following columns
+per row (each row is identified by its serial number):
+
 JSON structure produced per page
 ---------------------------------
   {
@@ -11,39 +14,26 @@ JSON structure produced per page
     "raw_text":    str,
     "substations": [
         {
-          "sl_no":                                           str,
-          "name_of_substation":                              str,
-          "substation_coordinates":                          str,
-          "region":                                          str,
-          "transformation_capacity_planned_mva":             str,
-          "transformation_capacity_existing_mva":            str,
-          "transformation_capacity_under_implementation_mva":str,
-          "bays": [
-              {
-                "section":                       str,
-                "bay_no_220kv":                  str,
-                "connectivity_quantum_mw_220kv": str,
-                "name_of_entity_220kv":          str,
-                "bay_no_400kv":                  str,
-                "connectivity_quantum_mw_400kv": str,
-                "name_of_entity_400kv":          str,
-                "margin_bay_no_220kv":           str,
-                "margin_available_mw_220kv":     str,
-                "margin_bay_no_400kv":           str,
-                "margin_available_mw_400kv":     str,
-                "space_provision_220kv":         str,
-                "space_provision_400kv":         str,
-                "remarks":                       str,
-              },
-              ...
-          ]
+          "sl_no":                    str,
+          "name_of_substation":       str,
+          "substation_coordinates":   str,
+          "region":                   str,
+          "220kv": {
+              "bay_no":          [str, ...],
+              "name_of_entity":  [str, ...]
+          },
+          "400kv": {
+              "bay_no":          [str, ...],
+              "name_of_entity":  [str, ...]
+          }
         },
         ...
     ]
   }
 
 Each unique substation (sl_no) produces exactly ONE item in "substations".
-All bay rows that belong to that substation are collected inside its "bays" list.
+All bay rows that belong to that substation are collected as lists inside
+the "220kv" and "400kv" dicts.
 """
 
 from __future__ import annotations
@@ -161,17 +151,42 @@ def page_passes_gate(text: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Core extraction:  page  ->  list of substations (each with a 'bays' list)
+# Helper: create an empty substation dict
+# ---------------------------------------------------------------------------
+
+def _new_substation(sl_no: str = "",
+                    name: str = "",
+                    coords: str = "",
+                    region: str = "") -> dict:
+    """Return a fresh substation dict with empty 220kV / 400kV lists."""
+    return {
+        "sl_no":                  sl_no,
+        "name_of_substation":     name,
+        "substation_coordinates": coords,
+        "region":                 region,
+        "220kv": {
+            "bay_no":         [],
+            "name_of_entity": [],
+        },
+        "400kv": {
+            "bay_no":         [],
+            "name_of_entity": [],
+        },
+    }
+
+
+# ---------------------------------------------------------------------------
+# Core extraction:  page  ->  list of substations
 # ---------------------------------------------------------------------------
 
 def extract_page_data(page, page_number: int) -> Optional[dict]:
     """Extract all substations from one pdfplumber page.
 
-    Each unique substation (identified by sl_no / name appearing in the first
-    7 columns) becomes **exactly one item** in the returned ``substations`` list.
-    All bay rows that belong to that substation are collected in a nested
-    ``bays`` list inside the item, so sl_no=1 produces a single dict rather
-    than many flat rows.
+    Each unique substation (identified by sl_no appearing in column 0)
+    becomes **exactly one item** in the returned ``substations`` list.
+    All bay rows that belong to that substation have their bay_no and
+    name_of_entity values collected into lists under the ``220kv`` and
+    ``400kv`` keys.
 
     Returns None if no allocation table is found on this page.
     """
@@ -186,11 +201,10 @@ def extract_page_data(page, page_number: int) -> Optional[dict]:
         return None
 
     n_cols     = len(COLUMN_NAMES)          # 20 columns
-    data_rows  = target[HEADER_ROW_COUNT:]  # skip 5 header rows
+    data_rows  = target[HEADER_ROW_COUNT:]  # skip header rows
 
     substations: list[dict] = []
     current_sub: dict | None = None
-    current_section: str = ""
 
     for raw_row in data_rows:
         norm = _normalise_row(raw_row, n_cols)
@@ -205,99 +219,61 @@ def extract_page_data(page, page_number: int) -> Optional[dict]:
         if _is_total_row(norm):
             continue
 
-        # ── Unpack columns ─────────────────────────────────────────────────
-        sl_no          = norm[0]
+        # ── Unpack only the columns we care about ──────────────────────────
+        sl_no           = norm[0]
         substation_name = norm[1]
-        coordinates    = norm[2]
-        region         = norm[3]
-        cap_planned    = norm[4]
-        cap_existing   = norm[5]
-        cap_under_impl = norm[6]
+        coordinates     = norm[2]
+        region          = norm[3]
 
-        bay_no_220     = norm[7]
-        quantum_220    = norm[8]
-        entity_220     = norm[9]
-        bay_no_400     = norm[10]
-        quantum_400    = norm[11]
-        entity_400     = norm[12]
-        margin_bay_220 = norm[13]
-        margin_mw_220  = norm[14]
-        margin_bay_400 = norm[15]
-        margin_mw_400  = norm[16]
-        space_220      = norm[17]
-        space_400      = norm[18]
-        remarks        = norm[19]
+        bay_no_220      = norm[7]
+        entity_220      = norm[9]
+        bay_no_400      = norm[10]
+        entity_400      = norm[12]
 
-        # ── Section label may leak into bay columns ────────────────────────
-        for sc in [bay_no_220, bay_no_400, region]:
-            if _is_section_str(sc):
-                current_section = sc.strip()
+        # ── Skip rows that are ONLY a section label leaked into bay cols ───
+        for val in [bay_no_220, bay_no_400, region]:
+            if _is_section_str(val):
                 break
+        else:
+            # none of them were section labels — this is fine
+            pass
 
-        # Suppress rows that are ONLY a section label in a bay column
-        if _is_section_str(bay_no_220) and not any(
-                [quantum_220, entity_220, bay_no_400, quantum_400, entity_400]):
+        if _is_section_str(bay_no_220) and not any([entity_220, bay_no_400, entity_400]):
             continue
-        if _is_section_str(bay_no_400) and not any(
-                [quantum_400, entity_400, bay_no_220, quantum_220, entity_220]):
+        if _is_section_str(bay_no_400) and not any([entity_400, bay_no_220, entity_220]):
             continue
 
-        # ── New substation header row ──────────────────────────────────────
+        # ── New substation header row (identified by sl_no) ────────────────
         if sl_no or substation_name:
             # Flush the previous substation before starting a new one
             if current_sub is not None:
                 substations.append(current_sub)
 
-            current_sub = {
-                "sl_no":                                           sl_no,
-                "name_of_substation":                              substation_name,
-                "substation_coordinates":                          coordinates,
-                "region":                                          region,
-                "transformation_capacity_planned_mva":             cap_planned,
-                "transformation_capacity_existing_mva":            cap_existing,
-                "transformation_capacity_under_implementation_mva": cap_under_impl,
-                "bays": [],
-            }
+            current_sub = _new_substation(
+                sl_no=sl_no,
+                name=substation_name,
+                coords=coordinates,
+                region=region,
+            )
 
-        # ── Bay row -- collect into the current substation's 'bays' list ───
-        has_bay_data = any([
-            bay_no_220, quantum_220, entity_220,
-            bay_no_400, quantum_400, entity_400,
-            margin_bay_220, margin_mw_220,
-            margin_bay_400, margin_mw_400,
-            remarks,
-        ])
+        # ── Collect bay data into current substation's lists ───────────────
+        has_bay_data = any([bay_no_220, entity_220, bay_no_400, entity_400])
         if not has_bay_data:
             continue
 
-        # If a bay row appears before any substation header (unusual), create
+        # If a bay row appears before any substation header, create
         # an anonymous placeholder so no data is lost.
         if current_sub is None:
-            current_sub = {
-                "sl_no": "", "name_of_substation": "",
-                "substation_coordinates": "", "region": "",
-                "transformation_capacity_planned_mva": "",
-                "transformation_capacity_existing_mva": "",
-                "transformation_capacity_under_implementation_mva": "",
-                "bays": [],
-            }
+            current_sub = _new_substation()
 
-        current_sub["bays"].append({
-            "section":                       current_section,
-            "bay_no_220kv":                  bay_no_220,
-            "connectivity_quantum_mw_220kv": quantum_220,
-            "name_of_entity_220kv":          entity_220,
-            "bay_no_400kv":                  bay_no_400,
-            "connectivity_quantum_mw_400kv": quantum_400,
-            "name_of_entity_400kv":          entity_400,
-            "margin_bay_no_220kv":           margin_bay_220,
-            "margin_available_mw_220kv":     margin_mw_220,
-            "margin_bay_no_400kv":           margin_bay_400,
-            "margin_available_mw_400kv":     margin_mw_400,
-            "space_provision_220kv":         space_220,
-            "space_provision_400kv":         space_400,
-            "remarks":                       remarks,
-        })
+        if bay_no_220:
+            current_sub["220kv"]["bay_no"].append(bay_no_220)
+        if entity_220:
+            current_sub["220kv"]["name_of_entity"].append(entity_220)
+        if bay_no_400:
+            current_sub["400kv"]["bay_no"].append(bay_no_400)
+        if entity_400:
+            current_sub["400kv"]["name_of_entity"].append(entity_400)
 
     # Flush the last substation
     if current_sub is not None:
@@ -327,7 +303,7 @@ def extract_bayallocation_pdf(pdf_path: str) -> list[dict]:
     list[dict]
         One element per page that contains a valid allocation table.
         Each element has 'page_number', 'raw_text', and 'substations'
-        (a list of substation dicts, each with a nested 'bays' list).
+        (a list of substation dicts with aggregated 220kV/400kV lists).
     """
     all_pages: list[dict] = []
 
@@ -348,9 +324,8 @@ def extract_bayallocation_pdf(pdf_path: str) -> list[dict]:
                 print(f"  o Page {page_number:3d} -- no allocation table found")
                 continue
 
-            sub_count  = len(result["substations"])
-            bay_count  = sum(len(s["bays"]) for s in result["substations"])
-            print(f"  + Page {page_number:3d} -> {sub_count} substations, {bay_count} bay rows")
+            sub_count = len(result["substations"])
+            print(f"  + Page {page_number:3d} -> {sub_count} substations")
             all_pages.append(result)
 
     return all_pages

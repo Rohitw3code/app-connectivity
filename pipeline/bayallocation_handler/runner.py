@@ -42,23 +42,10 @@ EXCEL_COLUMNS = [
     "name_of_substation",
     "substation_coordinates",
     "region",
-    "transformation_capacity_planned_mva",
-    "transformation_capacity_existing_mva",
-    "transformation_capacity_under_implementation_mva",
-    "section",
-    "bay_no_220kv",
-    "connectivity_quantum_mw_220kv",
-    "name_of_entity_220kv",
-    "bay_no_400kv",
-    "connectivity_quantum_mw_400kv",
-    "name_of_entity_400kv",
-    "margin_bay_no_220kv",
-    "margin_available_mw_220kv",
-    "margin_bay_no_400kv",
-    "margin_available_mw_400kv",
-    "space_provision_220kv",
-    "space_provision_400kv",
-    "remarks",
+    "220kv_bay_no",
+    "220kv_name_of_entity",
+    "400kv_bay_no",
+    "400kv_name_of_entity",
 ]
 
 
@@ -80,30 +67,31 @@ def _load_json(path: Path) -> dict:
 
 
 def _flatten(all_results: list[dict]) -> list[dict]:
-    """Flatten per-PDF, per-page, per-substation, per-bay into flat rows for Excel."""
+    """Flatten per-PDF, per-page, per-substation into flat rows for Excel.
+
+    Each substation becomes one row.  The 220kV/400kV lists are joined with
+    " | " for readability in the spreadsheet.
+    """
     flat: list[dict] = []
     for pdf_result in all_results:
         source = pdf_result.get("source", "")
         for page in pdf_result.get("pages", []):
             pnum = page.get("page_number")
             for sub in page.get("substations", []):
-                sub_meta = {
-                    "source_pdf":      source,
-                    "page_number":     pnum,
-                    "sl_no":           sub.get("sl_no", ""),
-                    "name_of_substation":    sub.get("name_of_substation", ""),
-                    "substation_coordinates":sub.get("substation_coordinates", ""),
-                    "region":          sub.get("region", ""),
-                    "transformation_capacity_planned_mva":
-                        sub.get("transformation_capacity_planned_mva", ""),
-                    "transformation_capacity_existing_mva":
-                        sub.get("transformation_capacity_existing_mva", ""),
-                    "transformation_capacity_under_implementation_mva":
-                        sub.get("transformation_capacity_under_implementation_mva", ""),
-                }
-                for bay in sub.get("bays", []):
-                    rec = {**sub_meta, **bay}
-                    flat.append(rec)
+                kv220 = sub.get("220kv", {})
+                kv400 = sub.get("400kv", {})
+                flat.append({
+                    "source_pdf":              source,
+                    "page_number":             pnum,
+                    "sl_no":                   sub.get("sl_no", ""),
+                    "name_of_substation":      sub.get("name_of_substation", ""),
+                    "substation_coordinates":  sub.get("substation_coordinates", ""),
+                    "region":                  sub.get("region", ""),
+                    "220kv_bay_no":            " | ".join(kv220.get("bay_no", [])),
+                    "220kv_name_of_entity":    " | ".join(kv220.get("name_of_entity", [])),
+                    "400kv_bay_no":            " | ".join(kv400.get("bay_no", [])),
+                    "400kv_name_of_entity":    " | ".join(kv400.get("name_of_entity", [])),
+                })
     return flat
 
 
@@ -130,7 +118,7 @@ def run_bayallocation_extraction(
     Returns
     -------
     pd.DataFrame
-        Flat DataFrame with one row per bay entry extracted.
+        Flat DataFrame with one row per substation extracted.
     """
     src  = Path(source_dir).resolve() if source_dir else BAY_SOURCE_DIR
     out  = Path(output_dir).resolve() if output_dir else BAY_OUTPUT_DIR
@@ -188,18 +176,12 @@ def run_bayallocation_extraction(
             "source":             pdf_path.name,
             "total_pages":        len(pages),
             "total_substations":  sum(len(p.get("substations", [])) for p in pages),
-            "total_bays":         sum(
-                len(s["bays"])
-                for p in pages
-                for s in p.get("substations", [])
-            ),
             "pages":              pages,
         }
 
         _save_json(result, cache)
         print(f"  -> {len(pages)} pages, "
-              f"{result['total_substations']} substations, "
-              f"{result['total_bays']} bay rows saved -> {cache.name}")
+              f"{result['total_substations']} substations saved -> {cache.name}")
         all_results.append(result)
 
     # -- Aggregate ─────────────────────────────────────────────────────────────
@@ -207,14 +189,12 @@ def run_bayallocation_extraction(
     total_pages        = sum(r.get("total_pages", 0) for r in all_results)
     total_substations  = sum(r.get("total_substations", 0) for r in all_results)
     flat_rows          = _flatten(all_results)
-    total_bay_rows     = len(flat_rows)
 
     print("\n" + "=" * 64)
     print("  BAY ALLOCATION SUMMARY")
     print(f"    PDFs processed  : {total_pdfs}")
     print(f"    Pages matched   : {total_pages}")
     print(f"    Substations     : {total_substations}")
-    print(f"    Bay rows total  : {total_bay_rows}")
     print("=" * 64)
 
     if not flat_rows:
@@ -233,7 +213,6 @@ def run_bayallocation_extraction(
             ("PDFs processed",  total_pdfs),
             ("Pages matched",   total_pages),
             ("Substations",     total_substations),
-            ("Bay rows total",  total_bay_rows),
         ],
     )
     print(f"\n[BayAllocation] Excel → {xlsx}")
