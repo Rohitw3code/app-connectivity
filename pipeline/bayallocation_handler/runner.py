@@ -80,16 +80,30 @@ def _load_json(path: Path) -> dict:
 
 
 def _flatten(all_results: list[dict]) -> list[dict]:
-    """Flatten per-PDF, per-page results into flat rows for Excel / DataFrame."""
+    """Flatten per-PDF, per-page, per-substation, per-bay into flat rows for Excel."""
     flat: list[dict] = []
     for pdf_result in all_results:
         source = pdf_result.get("source", "")
         for page in pdf_result.get("pages", []):
             pnum = page.get("page_number")
-            for entry in page.get("entries", []):
-                rec = {"source_pdf": source, "page_number": pnum}
-                rec.update(entry)
-                flat.append(rec)
+            for sub in page.get("substations", []):
+                sub_meta = {
+                    "source_pdf":      source,
+                    "page_number":     pnum,
+                    "sl_no":           sub.get("sl_no", ""),
+                    "name_of_substation":    sub.get("name_of_substation", ""),
+                    "substation_coordinates":sub.get("substation_coordinates", ""),
+                    "region":          sub.get("region", ""),
+                    "transformation_capacity_planned_mva":
+                        sub.get("transformation_capacity_planned_mva", ""),
+                    "transformation_capacity_existing_mva":
+                        sub.get("transformation_capacity_existing_mva", ""),
+                    "transformation_capacity_under_implementation_mva":
+                        sub.get("transformation_capacity_under_implementation_mva", ""),
+                }
+                for bay in sub.get("bays", []):
+                    rec = {**sub_meta, **bay}
+                    flat.append(rec)
     return flat
 
 
@@ -171,27 +185,36 @@ def run_bayallocation_extraction(
             continue
 
         result = {
-            "source":        pdf_path.name,
-            "total_pages":   len(pages),
-            "pages":         pages,
+            "source":             pdf_path.name,
+            "total_pages":        len(pages),
+            "total_substations":  sum(len(p.get("substations", [])) for p in pages),
+            "total_bays":         sum(
+                len(s["bays"])
+                for p in pages
+                for s in p.get("substations", [])
+            ),
+            "pages":              pages,
         }
 
         _save_json(result, cache)
-        total_entries = sum(len(p.get("entries", [])) for p in pages)
-        print(f"  → {len(pages)} pages, {total_entries} entries saved → {cache.name}")
+        print(f"  -> {len(pages)} pages, "
+              f"{result['total_substations']} substations, "
+              f"{result['total_bays']} bay rows saved -> {cache.name}")
         all_results.append(result)
 
-    # ── Aggregate ────────────────────────────────────────────────────────────
-    total_pdfs    = len(all_results)
-    total_pages   = sum(r.get("total_pages", 0) for r in all_results)
-    flat_rows     = _flatten(all_results)
-    total_entries = len(flat_rows)
+    # -- Aggregate ─────────────────────────────────────────────────────────────
+    total_pdfs         = len(all_results)
+    total_pages        = sum(r.get("total_pages", 0) for r in all_results)
+    total_substations  = sum(r.get("total_substations", 0) for r in all_results)
+    flat_rows          = _flatten(all_results)
+    total_bay_rows     = len(flat_rows)
 
     print("\n" + "=" * 64)
     print("  BAY ALLOCATION SUMMARY")
     print(f"    PDFs processed  : {total_pdfs}")
     print(f"    Pages matched   : {total_pages}")
-    print(f"    Total entries   : {total_entries}")
+    print(f"    Substations     : {total_substations}")
+    print(f"    Bay rows total  : {total_bay_rows}")
     print("=" * 64)
 
     if not flat_rows:
@@ -209,7 +232,8 @@ def run_bayallocation_extraction(
         summary_rows = [
             ("PDFs processed",  total_pdfs),
             ("Pages matched",   total_pages),
-            ("Total entries",   total_entries),
+            ("Substations",     total_substations),
+            ("Bay rows total",  total_bay_rows),
         ],
     )
     print(f"\n[BayAllocation] Excel → {xlsx}")
