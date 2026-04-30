@@ -43,10 +43,18 @@ EXCEL_COLUMNS = [
     "substation_coordinates",
     "region",
     "220kv_bay_no",
-    "220kv_name_of_entity",
     "400kv_bay_no",
-    "400kv_name_of_entity",
 ]
+
+
+def _format_bay_dict(bay_dict: dict) -> str:
+    """Serialize a bay_no dict {bay: entity} into a readable string.
+
+    Example: {"204": "ABC", "34": ""} → "204: ABC | 34: "
+    """
+    if not bay_dict:
+        return ""
+    return " | ".join(f"{k}: {v}" for k, v in bay_dict.items())
 
 
 # ─── Cache helpers ────────────────────────────────────────────────────────────
@@ -69,8 +77,8 @@ def _load_json(path: Path) -> dict:
 def _flatten(all_results: list[dict]) -> list[dict]:
     """Flatten per-PDF, per-page, per-substation into flat rows for Excel.
 
-    Each substation becomes one row.  The 220kV/400kV lists are joined with
-    " | " for readability in the spreadsheet.
+    Each substation becomes one row.  The 220kV/400kV bay_no dicts are
+    serialized as "bay: entity | bay: entity" for readability.
     """
     flat: list[dict] = []
     for pdf_result in all_results:
@@ -87,10 +95,8 @@ def _flatten(all_results: list[dict]) -> list[dict]:
                     "name_of_substation":      sub.get("name_of_substation", ""),
                     "substation_coordinates":  sub.get("substation_coordinates", ""),
                     "region":                  sub.get("region", ""),
-                    "220kv_bay_no":            " | ".join(kv220.get("bay_no", [])),
-                    "220kv_name_of_entity":    " | ".join(kv220.get("name_of_entity", [])),
-                    "400kv_bay_no":            " | ".join(kv400.get("bay_no", [])),
-                    "400kv_name_of_entity":    " | ".join(kv400.get("name_of_entity", [])),
+                    "220kv_bay_no":            _format_bay_dict(kv220.get("bay_no", {})),
+                    "400kv_bay_no":            _format_bay_dict(kv400.get("bay_no", {})),
                 })
     return flat
 

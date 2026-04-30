@@ -19,12 +19,17 @@ JSON structure produced per page
           "substation_coordinates":   str,
           "region":                   str,
           "220kv": {
-              "bay_no":          [str, ...],
-              "name_of_entity":  [str, ...]
+              "bay_no": {
+                  "204": "Name of Entity",
+                  "34":  "",
+                  "24":  "Name of Entity"
+              }
           },
           "400kv": {
-              "bay_no":          [str, ...],
-              "name_of_entity":  [str, ...]
+              "bay_no": {
+                  "100": "Name of Entity",
+                  "55":  ""
+              }
           }
         },
         ...
@@ -32,8 +37,8 @@ JSON structure produced per page
   }
 
 Each unique substation (sl_no) produces exactly ONE item in "substations".
-All bay rows that belong to that substation are collected as lists inside
-the "220kv" and "400kv" dicts.
+Every bay number is mapped to its entity name; if the entity name is
+missing the value is an empty string.
 """
 
 from __future__ import annotations
@@ -158,19 +163,17 @@ def _new_substation(sl_no: str = "",
                     name: str = "",
                     coords: str = "",
                     region: str = "") -> dict:
-    """Return a fresh substation dict with empty 220kV / 400kV lists."""
+    """Return a fresh substation dict with empty 220kV / 400kV bay dicts."""
     return {
         "sl_no":                  sl_no,
         "name_of_substation":     name,
         "substation_coordinates": coords,
         "region":                 region,
         "220kv": {
-            "bay_no":         [],
-            "name_of_entity": [],
+            "bay_no": {},   # {bay_number: entity_name_or_empty}
         },
         "400kv": {
-            "bay_no":         [],
-            "name_of_entity": [],
+            "bay_no": {},   # {bay_number: entity_name_or_empty}
         },
     }
 
@@ -184,9 +187,8 @@ def extract_page_data(page, page_number: int) -> Optional[dict]:
 
     Each unique substation (identified by sl_no appearing in column 0)
     becomes **exactly one item** in the returned ``substations`` list.
-    All bay rows that belong to that substation have their bay_no and
-    name_of_entity values collected into lists under the ``220kv`` and
-    ``400kv`` keys.
+    Each bay number is mapped to its entity name (or empty string) in
+    the ``bay_no`` dict under the ``220kv`` and ``400kv`` keys.
 
     Returns None if no allocation table is found on this page.
     """
@@ -267,13 +269,9 @@ def extract_page_data(page, page_number: int) -> Optional[dict]:
             current_sub = _new_substation()
 
         if bay_no_220:
-            current_sub["220kv"]["bay_no"].append(bay_no_220)
-        if entity_220:
-            current_sub["220kv"]["name_of_entity"].append(entity_220)
+            current_sub["220kv"]["bay_no"][bay_no_220] = entity_220
         if bay_no_400:
-            current_sub["400kv"]["bay_no"].append(bay_no_400)
-        if entity_400:
-            current_sub["400kv"]["name_of_entity"].append(entity_400)
+            current_sub["400kv"]["bay_no"][bay_no_400] = entity_400
 
     # Flush the last substation
     if current_sub is not None:
