@@ -65,10 +65,12 @@ Use these mapping rules to determine which output key a column maps to:
       "Sub-station" / "Substation"
 - Name of the developers    <- Applicant OR Name of Applicant OR Developer
 - type                      <- Type of Source / Generation Type / Energy Source
-                               Extract the FULL string including any associated MW values.
+                               STRICTLY use ONLY these keywords: Solar, BESS, Wind,
+                               Solar+Wind, Solar+BESS.
+                               Include the associated MW value in parentheses if present.
                                Examples: "Solar (300)", "Wind (12) + BESS (19)",
-                               "Hybrid (500)", "Solar + BESS (100/50)", "Hydro".
-                               Keep the parenthetical capacity values exactly as written.
+                               "Solar+Wind (500)", "Solar+BESS (100)", "BESS (50)".
+                               Do NOT include any other words, sentences, or descriptions.
 - GNA/ST II Application ID  <- Application No. & Date OR Application ID
                                OR any column with ST-II / GNA prefix
 - LTA Application ID        <- App. No. & Conn. Quantum (MW) of already granted Connectivity
@@ -124,9 +126,10 @@ CHARACTERISTIC VALUES:
     (Pattern: company names ending in Private Limited / Ltd / LLP)
 
 • type values look like:
-    Solar (300), Wind (12) + BESS (19), Hybrid (500), BESS (100),
-    Solar + BESS, Hydro+BESS, Hydro (50), Thermal
-    IMPORTANT: always include parenthetical MW values if present.
+    Solar (300), Wind (12) + BESS (19), Solar+Wind (500), BESS (100),
+    Solar+BESS (200), Wind (50)
+    STRICTLY only these keywords: Solar, BESS, Wind, Solar+Wind, Solar+BESS.
+    Always include parenthetical MW values if present. No other text.
 
 • Voltage values look like:
     400 kV, 765 kV, 220 kV, 132 kV, 66 kV, 33 kV
@@ -188,9 +191,10 @@ SKIP RULES — DO NOT extract rows if:
 - For "Status of application..." map wording to: Withdrawn / granted / Revoked.
 - PSP values: fill only when pump storage / PSP wording is explicitly present.
 - Battery values: fill only when BESS / Battery wording is explicitly present.
-- "type" must include the energy source keyword (Solar, Wind, Hybrid, BESS, Hydro, Thermal, etc.)
-  AND any associated MW capacity values in parentheses exactly as they appear in the table.
-  Examples: "Solar (300)", "Wind (12) + BESS (19)", "Hybrid + BESS (100)", "Hydro", or null.
+- "type" MUST be strictly one of these keywords: Solar, BESS, Wind, Solar+Wind, Solar+BESS
+  with associated MW values in parentheses if present.
+  Examples: "Solar (300)", "Wind (12) + BESS (19)", "Solar+Wind (500)", "BESS (50)", or null.
+  Do NOT include any other words, sentences, or descriptions in the type field.
 
 Return JSON in EXACTLY this shape:
 {{

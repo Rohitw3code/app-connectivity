@@ -230,33 +230,55 @@ def norm_dev(v: Optional[str]) -> Optional[str]:
 
 
 # ── norm_type ────────────────────────────────────────────────────────────────
-# Valid energy source types (normalised lowercase -> display form)
-_VALID_TYPES: dict[str, str] = {
-    "solar":   "Solar",
-    "wind":    "Wind",
-    "hybrid":  "Hybrid",
-    "bess":    "BESS",
-    "hydro":   "Hydro",
-    "thermal": "Thermal",
-    "psp":     "PSP",
+# Strict keyword set for the type column.
+# Only these keywords are allowed: Solar, BESS, Wind, Solar+Wind, Solar+BESS
+_KEYWORD_CANON: dict[str, str] = {
+    "solar":  "Solar",
+    "wind":   "Wind",
+    "bess":   "BESS",
+    "hybrid": "Solar+Wind",   # map hybrid → Solar+Wind
 }
 
+# Regex: captures a keyword optionally followed by a parenthetical value
+# e.g. "Solar (300)" → ("Solar", "(300)")
+#      "BESS"        → ("BESS", "")
+_TYPE_TOKEN_RE = re.compile(
+    r"(solar|wind|bess|hybrid)"       # keyword
+    r"(?:\s*\(([^)]*)\))?",           # optional (value)
+    re.IGNORECASE,
+)
+
+
 def norm_type(v: Optional[str]) -> Optional[str]:
-    """Normalise the energy source type to canonical casing while preserving associated values (e.g. '(19)')."""
+    """Normalise the type column to strict keywords (Solar, BESS, Wind,
+    Solar+Wind, Solar+BESS) while preserving associated MW values.
+
+    Examples:
+        "solar (300)"              → "Solar (300)"
+        "Wind (12) + BESS (19)"    → "Wind (12) + BESS (19)"
+        "Hybrid (500)"             → "Solar+Wind (500)"
+        "Hybrid + BESS"            → "Solar+Wind + BESS"
+        "Generator (Solar)"        → "Solar"
+        "Thermal"                  → None  (not in allowed set)
+    """
     v = clean(v)
     if not v:
         return None
-        
-    res = str(v)
-    for k, canonical in _VALID_TYPES.items():
-        pattern = r'\b' + re.escape(k) + r'\b'
-        res = re.sub(pattern, canonical, res, flags=re.IGNORECASE)
-        
-    # Standardize MW casing and clean up spacing around +
-    res = re.sub(r'\bmw\b', 'MW', res, flags=re.IGNORECASE)
-    res = re.sub(r'\s*\+\s*', ' + ', res)
-    
-    return res.strip()
+
+    tokens = _TYPE_TOKEN_RE.finditer(v)
+    parts: list[str] = []
+    for m in tokens:
+        raw_kw = m.group(1).lower()
+        canon = _KEYWORD_CANON.get(raw_kw)
+        if canon is None:
+            continue  # skip unrecognised keywords
+        val = (m.group(2) or "").strip()
+        parts.append(f"{canon} ({val})" if val else canon)
+
+    if not parts:
+        return None
+
+    return " + ".join(parts)
 
 
 # ── norm_voltage ─────────────────────────────────────────────────────────────
