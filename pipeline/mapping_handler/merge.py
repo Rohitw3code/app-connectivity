@@ -2,7 +2,7 @@
 mapping_handler/merge.py — Row-by-row CMETS × Effectiveness merge
 ===================================================================
 Takes a CMETS DataFrame and an effectiveness lookup dict, enriches
-each row by matching Application IDs (GNA primary, LTA fallback).
+each row by matching Application IDs (GNA primary, LTA fallback, 5.2 GNA).
 
 Edit this file to change:
   • Which CMETS columns are updated from effectiveness data
@@ -17,6 +17,14 @@ from typing import Optional
 
 import pandas as pd
 
+from pipeline.shared_utils import (
+    find_col,
+    ids_from_cell,
+    lookup_first,
+    safe_float,
+    classify_project_type
+)
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _is_valid(val) -> bool:
@@ -27,37 +35,6 @@ def _is_valid(val) -> bool:
     return str(val).strip().lower() not in ("", "none", "null", "na", "n/a", "-", "--", "nan")
 
 
-def _classify_project_type(type_str: Optional[str]) -> dict:
-    if not type_str:
-        return {}
-    t = type_str.lower().strip()
-    cats: list[str] = []
-    if "solar"  in t: cats.append("solar")
-    if "wind"   in t: cats.append("wind")
-    if "ess"    in t or "energy storage" in t or "bess" in t: cats.append("ess")
-    if "hydro"  in t or "pump" in t or "psp" in t: cats.append("hydro")
-    if len(cats) > 1 or "hybrid" in t: cats.append("hybrid")
-    return {cat: True for cat in cats}
-
-
-def _find_col(df: pd.DataFrame, *candidates: str) -> Optional[str]:
-    for c in candidates:
-        for col in df.columns:
-            if c.lower() == col.lower():
-                return col
-    return None
-
-
-def _ids_from_cell(cell_val) -> list[str]:
-    raw = str(cell_val or "").strip()
-    return [x.strip() for x in re.split(r"[,;\s]+", raw) if x.strip()] if raw else []
-
-
-def _lookup_first(ids: list[str], lookup: dict) -> Optional[dict]:
-    for id_ in ids:
-        if id_ in lookup:
-            return lookup[id_]
-    return None
 
 
 # ── Enrichment column definitions ────────────────────────────────────────────
@@ -79,6 +56,22 @@ _EFF_FIELD_TO_COL: list[tuple[str, str]] = [
 ]
 
 
+# ── Columns to update from effectiveness when matched ────────────────────────
+# These are effectiveness columns that overlap with CMETS columns.
+# When a match is found via GNA/LTA/5.2, the effectiveness value
+# overwrites the CMETS value (if the effectiveness value is valid).
+
+_OVERLAPPING_UPDATES: list[tuple[str, list[str]]] = [
+    # (effectiveness_key, [cmets_column_candidates...])
+    ("name_of_applicant",       ["Name of Developers", "Name of the developers"]),
+    ("substation",              ["Substation", "substaion"]),
+    ("state",                   ["State"]),
+    ("installed_capacity_mw",   ["Application Quantum (MW)(ST II)"]),
+    ("connectivity_mw",         ["Application Quantum (MW)(ST II)"]),
+    ("region",                  ["Region"]),
+]
+
+
 # ── Main merge function ──────────────────────────────────────────────────────
 
 def merge_rows(df: pd.DataFrame, lookup: dict) -> tuple[pd.DataFrame, dict]:
@@ -90,23 +83,39 @@ def merge_rows(df: pd.DataFrame, lookup: dict) -> tuple[pd.DataFrame, dict]:
         if col not in df.columns:
             df[col] = None
 
-    gna_col      = _find_col(df, "GNA/ST II Application ID")
-    lta_col      = _find_col(df, "LTA Application ID")
-    col_dev_name = _find_col(df, "Name of the developers", "Name of developers")
-    col_subst    = _find_col(df, "substaion", "Substation")
-    col_state    = _find_col(df, "State")
-    col_quantum  = _find_col(df, "Application Quantum (MW)(ST II)")
+    gna_col      = find_col(df, "GNA/ST II Application ID")
+    lta_col      = find_col(df, "LTA Application ID")
+    col_52       = find_col(df, "Application ID under Enhancement 5.2 or revision")
+    col_dev_name = find_col(df, "Name of the developers", "Name of developers", "Name of Developers")
+    col_subst    = find_col(df, "substaion", "Substation")
+    col_state    = find_col(df, "State")
+    col_quantum  = find_col(df, "Application Quantum (MW)(ST II)")
 
-    matched_gna = matched_lta = unmatched = 0
+    matched_gna = matched_lta = matched_52 = unmatched = 0
 
     for idx, row in df.iterrows():
-        gna_ids   = _ids_from_cell(row.get(gna_col)) if gna_col else []
-        eff       = _lookup_first(gna_ids, lookup)
-        match_via = "GNA"
+        # ── Find effectiveness record using ID cascade ────────────────
+        eff       = None
+        match_via = None
 
+        # Try GNA first
+        if gna_col:
+            gna_ids = ids_from_cell(row.get(gna_col))
+            eff     = lookup_first(gna_ids, lookup)
+            if eff:
+                match_via = "GNA"
+
+        # Fallback to LTA
         if eff is None and lta_col:
-            eff       = _lookup_first(_ids_from_cell(row.get(lta_col)), lookup)
-            match_via = "LTA"
+            eff = lookup_first(ids_from_cell(row.get(lta_col)), lookup)
+            if eff:
+                match_via = "LTA"
+
+        # Fallback to 5.2 GNA
+        if eff is None and col_52:
+            eff = lookup_first(ids_from_cell(row.get(col_52)), lookup)
+            if eff:
+                match_via = "5.2"
 
         if eff is None:
             unmatched += 1
@@ -114,10 +123,12 @@ def merge_rows(df: pd.DataFrame, lookup: dict) -> tuple[pd.DataFrame, dict]:
 
         if match_via == "GNA":
             matched_gna += 1
-        else:
+        elif match_via == "LTA":
             matched_lta += 1
+        else:
+            matched_52 += 1
 
-        # Update existing columns
+        # ── Update overlapping CMETS columns from effectiveness ───────
         if col_dev_name and _is_valid(eff.get("name_of_applicant")):
             df.at[idx, col_dev_name] = eff["name_of_applicant"]
         if col_subst and _is_valid(eff.get("substation")):
@@ -127,14 +138,14 @@ def merge_rows(df: pd.DataFrame, lookup: dict) -> tuple[pd.DataFrame, dict]:
         if col_quantum and _is_valid(eff.get("installed_capacity_mw")):
             df.at[idx, col_quantum] = eff["installed_capacity_mw"]
 
-        # Populate new enrichment columns
+        # ── Populate new enrichment columns ───────────────────────────
         for eff_key, col_name in _EFF_FIELD_TO_COL:
             if _is_valid(eff.get(eff_key)):
                 df.at[idx, col_name] = eff[eff_key]
 
-        # Hybrid total
-        cats = _classify_project_type(eff.get("type_of_project") or "")
-        if cats.get("hybrid"):
+        # ── Hybrid total ──────────────────────────────────────────────
+        cats = classify_project_type(eff.get("type_of_project") or "")
+        if "hybrid" in cats:
             total = sum(
                 float(eff.get(k) or 0)
                 for k in ("solar_mw", "wind_mw", "ess_mw", "hydro_mw")
@@ -146,6 +157,7 @@ def merge_rows(df: pd.DataFrame, lookup: dict) -> tuple[pd.DataFrame, dict]:
     stats = {
         "matched_gna": matched_gna,
         "matched_lta": matched_lta,
+        "matched_52":  matched_52,
         "unmatched":   unmatched,
         "total_rows":  len(df),
     }

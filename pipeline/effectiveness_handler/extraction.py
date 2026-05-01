@@ -21,25 +21,9 @@ from config import MODEL
 from llm_client import call_llm, extract_text_from_response
 from pipeline.effectiveness_handler.prompts import SYSTEM_PROMPT, USER_TEMPLATE
 from pipeline.effectiveness_handler.models import RERecord, safe_record
+from pipeline.shared_utils import parse_json
 
 
-# ── JSON parser ───────────────────────────────────────────────────────────────
-
-def _parse_json(text: str) -> list | dict:
-    raw = (text or "").strip()
-    if raw.startswith("```"):
-        raw = re.sub(r"^```(?:json)?\s*", "", raw, re.IGNORECASE)
-        raw = re.sub(r"\s*```$", "", raw)
-    try:
-        return json.loads(raw)
-    except json.JSONDecodeError:
-        m = re.search(r"\[.*\]", raw, re.DOTALL)
-        if m:
-            try:
-                return json.loads(m.group(0))
-            except json.JSONDecodeError:
-                pass
-    return {}
 
 
 # ── Strategy 1: LLM extraction ───────────────────────────────────────────────
@@ -82,7 +66,7 @@ def extract_with_llm(pdf_path: str, source_name: str, runtime) -> list[RERecord]
                     script_path=runtime.llm_script_path,
                 )
                 raw_text = extract_text_from_response(resp)
-                result   = _parse_json(raw_text)
+                result   = parse_json(raw_text)
                 rows     = result if isinstance(result, list) else (
                     next((v for v in result.values() if isinstance(v, list)), [])
                     if isinstance(result, dict) else []

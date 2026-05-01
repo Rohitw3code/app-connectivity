@@ -22,7 +22,8 @@ import pandas as pd
 from pipeline.mapping_handler.lookup import build_lookup
 from pipeline.mapping_handler.merge import merge_rows
 from pipeline.mapping_handler.formatting import format_mapped_excel
-from pipeline.effectiveness_handler.date_updater import update_gna_dates
+from pipeline.effectiveness_handler.date_updater import update_gna_dates, update_additional_capacity_dates
+from pipeline.effectiveness_handler.capacity_calculator import compute_installed_capacity
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +46,10 @@ def run_mapping(
     mapped_excel_path:        Path | str | None = None,
 ) -> Path:
     """Merge CMETS + effectiveness data → write JSON + Excel.
+
+    Produces two outputs:
+    1. Raw merged Excel (CMETS columns updated from effectiveness)
+    2. CMETS enriched with Installed/Break-up Capacity (MW) columns
 
     Returns the absolute path to effectiveness_mapped.xlsx.
     """
@@ -85,18 +90,17 @@ def run_mapping(
     cmets_df = pd.read_excel(cmets_path, sheet_name=0)
     print(f"[Mapping] CMETS rows loaded: {len(cmets_df)}")
 
-    # Merge
+    # ── Step 1: Merge (update overlapping columns + add enrichment columns) ──
     enriched_df, stats = merge_rows(cmets_df, lookup)
     print(
         f"[Mapping] Matched GNA: {stats['matched_gna']} | "
         f"LTA: {stats['matched_lta']} | "
+        f"5.2: {stats['matched_52']} | "
         f"Unmatched: {stats['unmatched']} | "
         f"Total: {stats['total_rows']}"
     )
 
-    # GNA Operationalization Date update
-    # Compare effectiveness expected_date with CMETS GNA Operationalization Date
-    # and update to the later value when effectiveness is newer.
+    # ── Step 2: GNA Operationalization Date update ───────────────────────────
     if lookup:
         enriched_df, date_stats = update_gna_dates(enriched_df, lookup)
         print(
@@ -107,7 +111,28 @@ def run_mapping(
             f"No eff date: {date_stats['no_eff_date']}"
         )
 
-    # Dump JSON
+    # ── Step 3: Additional Capacity Date update ──────────────────────────────
+    if lookup:
+        enriched_df, add_date_stats = update_additional_capacity_dates(enriched_df, lookup)
+        print(
+            f"[Mapping] Additional Capacity Date Update: "
+            f"Matched: {add_date_stats['matched']} | "
+            f"Updated: {add_date_stats['updated_date']} | "
+            f"Kept same: {add_date_stats['kept_same']} | "
+            f"No eff date: {add_date_stats['no_eff_date']}"
+        )
+
+    # ── Step 4: Installed/Break-up Capacity (MW) computation ─────────────────
+    if lookup:
+        enriched_df, cap_stats = compute_installed_capacity(enriched_df, lookup)
+        print(
+            f"[Mapping] Installed Capacity Calc: "
+            f"Matched: {cap_stats['matched']} | "
+            f"Computed: {cap_stats['computed']} | "
+            f"Skipped: {cap_stats['skipped']}"
+        )
+
+    # ── Dump JSON ────────────────────────────────────────────────────────────
     mapped_records = enriched_df.to_dict(orient="records")
     with open(json_path, "w", encoding="utf-8") as fh:
         json.dump(
@@ -116,7 +141,7 @@ def run_mapping(
         )
     print(f"[Mapping] JSON saved → {json_path}")
 
-    # Write Excel
+    # ── Write Excel ──────────────────────────────────────────────────────────
     enriched_df.to_excel(str(xlsx_path), index=False, sheet_name="Extracted Data")
     format_mapped_excel(str(xlsx_path))
     print(f"[Mapping] Excel saved → {xlsx_path}")

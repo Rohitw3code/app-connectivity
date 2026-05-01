@@ -24,6 +24,7 @@ from pipeline.cmets_handler.column_registry import (
     COLUMN_DEFS,
     get_llm_key_to_column_map,
 )
+from pipeline.cmets_handler.battery_extractor import extract_battery_values
 
 # ── Indian states / UTs ──────────────────────────────────────────────────────
 INDIA_STATES_UTS = [
@@ -203,22 +204,6 @@ def norm_psp_drawl(v: Optional[str]) -> Optional[str]:
 
 
 # ── Battery (BESS) columns ──────────────────────────────────────────────────
-def _extract_battery_values(*vals: Optional[str]) -> tuple[Optional[str], Optional[str], Optional[str]]:
-    """Extract Battery MWh/Injection/Drawl from combined text.
-
-    Only fills values when BESS context is present.
-    Note: for BESS, drawl is generally larger than injection.
-    """
-    text = " ".join(str(v or "") for v in vals)
-    if not re.search(r"\b(bess|battery\s*energy|battery)\b", text, re.IGNORECASE):
-        return None, None, None
-    mwh_m   = re.search(r"(\d+(?:\.\d+)?)\s*MWh", text, re.IGNORECASE)
-    inj_m   = re.search(r"(?:max\s*)?injection\s*[:\-]?\s*(\d+(?:\.\d+)?)", text, re.IGNORECASE)
-    drawl_m = re.search(r"(?:max\s*)?(?:drawl|drawal)\s*[:\-]?\s*(\d+(?:\.\d+)?)", text, re.IGNORECASE)
-    return (mwh_m.group(1) if mwh_m else None,
-            inj_m.group(1) if inj_m else None,
-            drawl_m.group(1) if drawl_m else None)
-
 
 def norm_battery_mwh(v: Optional[str]) -> Optional[str]:
     """Normalise Battery MWh value."""
@@ -464,7 +449,7 @@ def normalize(rows: list[MappedRow]) -> list[MappedRow]:
         p["PSP Drawl (MW)"]     = clean(drw or raw_psp_drw)
 
         # ── Battery (BESS) columns (multi-field derivation) ──────────────
-        bat_mwh, bat_inj, bat_drw = _extract_battery_values(
+        bat_mwh, bat_inj, bat_drw = extract_battery_values(
             raw_bat_mwh, raw_bat_inj, raw_bat_drw, raw_mode,
             p.get("Type", ""),
         )

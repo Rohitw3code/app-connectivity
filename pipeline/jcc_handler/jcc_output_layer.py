@@ -54,6 +54,7 @@ from typing import Optional
 import pandas as pd
 
 from pipeline.excel_utils import export_to_excel
+from pipeline.shared_utils import safe_str, find_col
 
 logger = logging.getLogger(__name__)
 
@@ -132,8 +133,8 @@ def _filter_valid(records: list[dict]) -> list[dict]:
     """Keep records that have substation/developer or any application ID."""
     valid = []
     for rec in records:
-        substation = _safe_str(rec.get("substation"))
-        developer  = _safe_str(rec.get("name_of_applicant"))
+        substation = safe_str(rec.get("substation"))
+        developer  = safe_str(rec.get("name_of_applicant"))
         id_values = _collect_ids_from_record(rec)
         if substation or developer or id_values:
             valid.append(rec)
@@ -168,14 +169,6 @@ def flatten_jcc_data(all_results: list[dict]) -> list[dict]:
 # ─────────────────────────────────────────────────────────────────────────────
 # STEP 3 — ID Matching + Fuzzy Fallback (Substation + Developer Name)
 # ─────────────────────────────────────────────────────────────────────────────
-
-def _safe_str(val) -> str:
-    """Convert a value to a clean string, handling None/NaN."""
-    if val is None:
-        return ""
-    if isinstance(val, float) and pd.isna(val):
-        return ""
-    return " ".join(str(val).split()).strip()
 
 
 def _normalize(text: str) -> str:
@@ -280,7 +273,7 @@ def _get_record_value(record: dict, *candidate_keys: str) -> str:
         key = key_map.get(cand.lower())
         if not key:
             continue
-        value = _safe_str(record.get(key))
+        value = safe_str(record.get(key))
         if value:
             return value
     return ""
@@ -315,8 +308,8 @@ def find_best_jcc_match(
     ids = id_values or []
 
     for row in jcc_rows:
-        pooling   = _safe_str(row.get("pooling_station"))
-        applicant = _safe_str(row.get("connectivity_applicant"))
+        pooling   = safe_str(row.get("pooling_station"))
+        applicant = safe_str(row.get("connectivity_applicant"))
 
         # Fuzzy similarity
         sub_score = _fuzzy_score(substation, pooling)
@@ -437,8 +430,8 @@ def compute_gna_tgna(jcc_row: dict) -> tuple[Optional[float], Optional[float]]:
       • TGNA — status is NOT "Effective" (pending transmission)
                → sum only the MW values marked "(Commissioned)"
     """
-    connectivity_status = _safe_str(jcc_row.get("connectivity_start_date_under_gna"))
-    schedule_text       = _safe_str(jcc_row.get("schedule_as_per_current_jcc"))
+    connectivity_status = safe_str(jcc_row.get("connectivity_start_date_under_gna"))
+    schedule_text       = safe_str(jcc_row.get("schedule_as_per_current_jcc"))
 
     gna_value:  Optional[float] = None
     tgna_value: Optional[float] = None
@@ -558,8 +551,8 @@ def run_jcc_output_layer(
     tgna_count = 0
 
     for eff_rec in eff_records:
-        substation = _safe_str(eff_rec.get("substation"))
-        developer  = _safe_str(eff_rec.get("name_of_applicant"))
+        substation = safe_str(eff_rec.get("substation"))
+        developer  = safe_str(eff_rec.get("name_of_applicant"))
         id_values  = _collect_ids_from_record(eff_rec)
         gna_id = _get_record_value(
             eff_rec,
@@ -619,8 +612,8 @@ def run_jcc_output_layer(
             tgna_count += 1
 
         output_rows.append({
-            "Developer Name": developer or _safe_str(jcc_match.get("connectivity_applicant")),
-            "Substation":     substation or _safe_str(jcc_match.get("pooling_station")),
+            "Developer Name": developer or safe_str(jcc_match.get("connectivity_applicant")),
+            "Substation":     substation or safe_str(jcc_match.get("pooling_station")),
             "GNA/ST II Application ID": gna_id,
             "LTA Application ID": lta_id,
             "Application ID under Enhancement 5.2 or revision": enhancement_id,
@@ -698,14 +691,6 @@ def run_jcc_output_layer(
 LAYER4_EXCEL: Path = _START_DIR / "excels" / "cmets_jcc_mapped.xlsx"
 
 
-def _find_col(df: pd.DataFrame, *candidates: str) -> Optional[str]:
-    """Find the first column name in *df* that matches any of *candidates* (case-insensitive)."""
-    for c in candidates:
-        for col in df.columns:
-            if c.lower() == col.lower():
-                return col
-    return None
-
 
 def _id_in_connectivity_applicant(search_id: str, jcc_rows: list[dict]) -> Optional[dict]:
     """Search for *search_id* inside the `connectivity_applicant` column of
@@ -723,7 +708,7 @@ def _id_in_connectivity_applicant(search_id: str, jcc_rows: list[dict]) -> Optio
         return None
 
     for row in jcc_rows:
-        applicant_raw = _safe_str(row.get("connectivity_applicant"))
+        applicant_raw = safe_str(row.get("connectivity_applicant"))
         if not applicant_raw:
             continue
         haystack = _normalize_id(applicant_raw)

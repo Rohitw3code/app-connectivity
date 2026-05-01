@@ -27,6 +27,7 @@ from pipeline.cmets_handler.voltage_extractor import (
     extract_voltage_from_row,
     extract_voltage_from_page,
 )
+from pipeline.shared_utils import parse_json
 
 
 # ── Sub-layer A: PDF page extraction ──────────────────────────────────────────
@@ -50,21 +51,7 @@ def extract_pages(pdf_path: str) -> list[dict]:
 
 # ── Sub-layer C: LLM row extraction ──────────────────────────────────────────
 
-def _parse_json(text: str) -> dict | list:
-    raw = (text or "").strip()
-    if raw.startswith("```"):
-        raw = re.sub(r"^```(?:json)?\s*", "", raw, re.IGNORECASE)
-        raw = re.sub(r"\s*```$", "", raw)
-    try:
-        return json.loads(raw)
-    except json.JSONDecodeError:
-        m = re.search(r"\{.*\}", raw, re.DOTALL)
-        if m:
-            try:
-                return json.loads(m.group(0))
-            except json.JSONDecodeError:
-                pass
-    return {}
+
 
 
 def llm_extract_rows(
@@ -89,7 +76,7 @@ def llm_extract_rows(
     try:
         resp    = call_llm(prompt, vm=vm_mode, api_key=api_key, model=MODEL, script_path=llm_script_path)
         content = extract_text_from_response(resp)
-        result  = _parse_json(content)
+        result  = parse_json(content)
         rows    = result.get("rows", []) if isinstance(result, dict) else []
         return rows if isinstance(rows, list) else []
     except Exception as exc:

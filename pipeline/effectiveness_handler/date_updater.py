@@ -27,6 +27,20 @@ from typing import Optional
 
 import pandas as pd
 
+from pipeline.shared_utils import (
+    find_col,
+    safe_str,
+    ids_from_cell,
+    lookup_first
+)
+
+from pipeline.shared_utils import (
+    find_col,
+    safe_str,
+    ids_from_cell,
+    lookup_first
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -105,40 +119,7 @@ def _format_date(d: date) -> str:
     return d.strftime("%d.%m.%Y")
 
 
-# ── Column finders ────────────────────────────────────────────────────────────
 
-def _find_col(df: pd.DataFrame, *candidates: str) -> Optional[str]:
-    """Return the first matching column name (case-insensitive)."""
-    for c in candidates:
-        for col in df.columns:
-            if c.lower() == col.lower():
-                return col
-    return None
-
-
-def _safe_str(val) -> str:
-    """Convert a value to a clean string, handling None/NaN."""
-    if val is None:
-        return ""
-    if isinstance(val, float) and pd.isna(val):
-        return ""
-    return str(val).strip()
-
-
-def _ids_from_cell(cell_val) -> list[str]:
-    """Split a cell into individual application IDs."""
-    raw = _safe_str(cell_val)
-    if not raw:
-        return []
-    return [x.strip() for x in re.split(r"[,;\s]+", raw) if x.strip()]
-
-
-def _lookup_first(ids: list[str], lookup: dict) -> Optional[dict]:
-    """Return the first matching record from *lookup* for any ID in *ids*."""
-    for id_ in ids:
-        if id_ in lookup:
-            return lookup[id_]
-    return None
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
@@ -163,10 +144,10 @@ def update_gna_dates(
     (updated_df, stats)
         stats keys: total_rows, matched, updated_date, kept_same, no_eff_date
     """
-    col_gna_id   = _find_col(df, "GNA/ST II Application ID")
-    col_lta_id   = _find_col(df, "LTA Application ID")
-    col_gna_date = _find_col(df, "GNA Operationalization Date")
-    col_gna_yn   = _find_col(df, "GNA Operationalization (Yes/No)")
+    col_gna_id   = find_col(df, "GNA/ST II Application ID")
+    col_lta_id   = find_col(df, "LTA Application ID")
+    col_gna_date = find_col(df, "GNA Operationalization Date")
+    col_gna_yn   = find_col(df, "GNA Operationalization (Yes/No)")
 
     if not col_gna_date:
         logger.warning("[DateUpdater] 'GNA Operationalization Date' column not found — skipping.")
@@ -186,12 +167,12 @@ def update_gna_dates(
 
     for idx, row in df.iterrows():
         # Find effectiveness record via GNA or LTA ID
-        gna_ids = _ids_from_cell(row.get(col_gna_id)) if col_gna_id else []
-        eff_rec = _lookup_first(gna_ids, effectiveness_lookup)
+        gna_ids = ids_from_cell(row.get(col_gna_id)) if col_gna_id else []
+        eff_rec = lookup_first(gna_ids, effectiveness_lookup)
 
         if eff_rec is None and col_lta_id:
-            lta_ids = _ids_from_cell(row.get(col_lta_id))
-            eff_rec = _lookup_first(lta_ids, effectiveness_lookup)
+            lta_ids = ids_from_cell(row.get(col_lta_id))
+            eff_rec = lookup_first(lta_ids, effectiveness_lookup)
 
         if eff_rec is None:
             continue
@@ -207,7 +188,7 @@ def update_gna_dates(
             continue
 
         # Parse CMETS GNA Operationalization Date
-        cmets_date_raw = _safe_str(row.get(col_gna_date))
+        cmets_date_raw = safe_str(row.get(col_gna_date))
         cmets_date = parse_date(cmets_date_raw)
 
         # Decide which date to use
@@ -238,6 +219,113 @@ def update_gna_dates(
 
     logger.info(
         "[DateUpdater] Rows: %d | Matched: %d | Updated: %d | Kept same: %d | No eff date: %d",
+        len(df), matched, updated_date, kept_same, no_eff_date,
+    )
+
+    return df, stats
+
+
+# ── Additional Capacity Date Updater ─────────────────────────────────────────
+
+def update_additional_capacity_dates(
+    df: pd.DataFrame,
+    effectiveness_lookup: dict[str, dict],
+) -> tuple[pd.DataFrame, dict]:
+    """Compare effectiveness ``expected_date`` with CMETS
+    ``Date from which additional capacity is to be added`` and update
+    to the later value when effectiveness is newer.
+
+    This is the same future-date logic used in ``update_gna_dates`` but
+    targets a different CMETS column.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        The CMETS DataFrame (or merged DataFrame).
+    effectiveness_lookup : dict
+        ``application_id → record`` dict with an ``expected_date`` key.
+
+    Returns
+    -------
+    (updated_df, stats)
+        stats keys: total_rows, matched, updated_date, kept_same, no_eff_date
+    """
+    col_gna_id   = find_col(df, "GNA/ST II Application ID")
+    col_lta_id   = find_col(df, "LTA Application ID")
+    col_52_id    = find_col(df, "Application ID under Enhancement 5.2 or revision")
+    col_add_date = find_col(df, "Date from which additional capacity is to be added")
+
+    if not col_add_date:
+        # Create the column if it doesn't exist
+        col_add_date = "Date from which additional capacity is to be added"
+        if col_add_date not in df.columns:
+            df[col_add_date] = None
+
+    matched       = 0
+    updated_date  = 0
+    kept_same     = 0
+    no_eff_date   = 0
+
+    for idx, row in df.iterrows():
+        # ── Find effectiveness record via GNA → LTA → 5.2 cascade ────────
+        eff_rec = None
+
+        if col_gna_id:
+            gna_ids = ids_from_cell(row.get(col_gna_id))
+            eff_rec = lookup_first(gna_ids, effectiveness_lookup)
+
+        if eff_rec is None and col_lta_id:
+            lta_ids = ids_from_cell(row.get(col_lta_id))
+            eff_rec = lookup_first(lta_ids, effectiveness_lookup)
+
+        if eff_rec is None and col_52_id:
+            enh_ids = ids_from_cell(row.get(col_52_id))
+            eff_rec = lookup_first(enh_ids, effectiveness_lookup)
+
+        if eff_rec is None:
+            continue
+
+        matched += 1
+
+        # ── Parse effectiveness expected_date ─────────────────────────────
+        eff_date_raw = eff_rec.get("expected_date")
+        eff_date = parse_date(eff_date_raw)
+
+        if eff_date is None:
+            no_eff_date += 1
+            continue
+
+        # ── Parse CMETS additional capacity date ─────────────────────────
+        cmets_date_raw = safe_str(row.get(col_add_date))
+        cmets_date = parse_date(cmets_date_raw)
+
+        # ── Decide which date to use (future-date logic) ─────────────────
+        if cmets_date is None:
+            # No existing CMETS date → use effectiveness date
+            final_date = eff_date
+            updated_date += 1
+        elif eff_date > cmets_date:
+            # Effectiveness date is later → update
+            final_date = eff_date
+            updated_date += 1
+        else:
+            # CMETS date is same or later → keep
+            final_date = cmets_date
+            kept_same += 1
+
+        # ── Write the final date ─────────────────────────────────────────
+        df.at[idx, col_add_date] = _format_date(final_date)
+
+    stats = {
+        "total_rows":   len(df),
+        "matched":      matched,
+        "updated_date": updated_date,
+        "kept_same":    kept_same,
+        "no_eff_date":  no_eff_date,
+    }
+
+    logger.info(
+        "[AdditionalCapacityDateUpdater] Rows: %d | Matched: %d | Updated: %d | Kept same: %d | No eff date: %d",
         len(df), matched, updated_date, kept_same, no_eff_date,
     )
 
