@@ -65,8 +65,10 @@ Use these mapping rules to determine which output key a column maps to:
       "Sub-station" / "Substation"
 - Name of the developers    <- Applicant OR Name of Applicant OR Developer
 - type                      <- Type of Source / Generation Type / Energy Source
-                               (values: Solar, Wind, Hybrid, BESS, Solar + BESS,
-                                Hybrid + BESS, Hydro, Hydro+BESS, Thermal)
+                               Extract the FULL string including any associated MW values.
+                               Examples: "Solar (300)", "Wind (12) + BESS (19)",
+                               "Hybrid (500)", "Solar + BESS (100/50)", "Hydro".
+                               Keep the parenthetical capacity values exactly as written.
 - GNA/ST II Application ID  <- Application No. & Date OR Application ID
                                OR any column with ST-II / GNA prefix
 - LTA Application ID        <- App. No. & Conn. Quantum (MW) of already granted Connectivity
@@ -122,7 +124,9 @@ CHARACTERISTIC VALUES:
     (Pattern: company names ending in Private Limited / Ltd / LLP)
 
 • type values look like:
-    Solar, Solar + BESS, Hybrid, Hybrid + BESS, BESS, Hydro, Hydro+BESS
+    Solar (300), Wind (12) + BESS (19), Hybrid (500), BESS (100),
+    Solar + BESS, Hydro+BESS, Hydro (50), Thermal
+    IMPORTANT: always include parenthetical MW values if present.
 
 • Voltage values look like:
     400 kV, 765 kV, 220 kV, 132 kV, 66 kV, 33 kV
@@ -184,7 +188,9 @@ SKIP RULES — DO NOT extract rows if:
 - For "Status of application..." map wording to: Withdrawn / granted / Revoked.
 - PSP values: fill only when pump storage / PSP wording is explicitly present.
 - Battery values: fill only when BESS / Battery wording is explicitly present.
-- "type" must be one of: Solar, Wind, Hybrid, BESS, Solar + BESS, Hybrid + BESS, Hydro, Hydro+BESS, Thermal, or null.
+- "type" must include the energy source keyword (Solar, Wind, Hybrid, BESS, Hydro, Thermal, etc.)
+  AND any associated MW capacity values in parentheses exactly as they appear in the table.
+  Examples: "Solar (300)", "Wind (12) + BESS (19)", "Hybrid + BESS (100)", "Hydro", or null.
 
 Return JSON in EXACTLY this shape:
 {{
@@ -194,7 +200,7 @@ Return JSON in EXACTLY this shape:
             "State": "uttar pradesh",
             "substaion": "Aligarh (PG)",
             "Name of the developers": "THDC India Limited",
-            "type": "Solar",
+            "type": "Solar (300)",
             "GNA/ST II Application ID": "1200003683",
             "LTA Application ID": "0412100008",
             "Application ID under Enhancement 5.2 or revision": null,
