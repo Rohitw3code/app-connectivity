@@ -8,6 +8,9 @@ The prompt uses a **dual detection strategy**:
   • Header-name mapping rules (match known column header text)
   • Value-fingerprint hints (identify columns by characteristic cell values
     when headers change across PDF editions)
+
+Column definitions are centralised in column_registry.py.
+This file builds the LLM prompt from those definitions.
 """
 
 from __future__ import annotations
@@ -28,17 +31,22 @@ Output keys for each row:
  7)  LTA Application ID
  8)  Application ID under Enhancement 5.2 or revision
  9)  Application Quantum (MW)(ST II)
- 10) Nature of Applicant
- 11) Mode(Criteria for applying)
- 12) Applied Start of Connectivity sought by developer date
- 13) Application/Submission Date
- 14) GNA Operationalization Date
- 15) GNA Operationalization (Yes/No)
- 16) Status of application(Withdrawn / granted. Revoked.)
- 17) PSP MWh
- 18) PSP Injection (MW)
- 19) PSP Drawl (MW)
- 20) Voltage
+ 10) Granted Quantum GNA/LTA(MW)
+ 11) Battery MWh
+ 12) Battery Injection (MW)
+ 13) Battery Drawl (MW)
+ 14) Nature of Applicant
+ 15) Mode(Criteria for applying)
+ 16) Applied Start of Connectivity sought by developer date
+ 17) Date from which additional capacity is to be added
+ 18) Application/Submission Date
+ 19) GNA Operationalization Date
+ 20) GNA Operationalization (Yes/No)
+ 21) Status of application(Withdrawn / granted. Revoked.)
+ 22) PSP MWh
+ 23) PSP Injection (MW)
+ 24) PSP Drawl (MW)
+ 25) Voltage
 
 ═══════════════════════════════════════════════════════
 COLUMN DETECTION — HEADER NAME MAPPING
@@ -66,10 +74,24 @@ Use these mapping rules to determine which output key a column maps to:
 - Application ID under Enhancement 5.2 or revision
       <- use only when table/row context mentions Enhancement 5.2 / regulation 5.2 / revision
 - Application Quantum (MW)(ST II) <- Installed Capacity (MW) OR Connectivity Quantum (MW)
+- Granted Quantum GNA/LTA(MW) <- Granted Quantum (MW) OR Connectivity Quantum (MW) granted
+      OR Granted Connectivity Quantum. This is the quantum that was actually GRANTED,
+      which may differ from the applied quantum.
+- Battery MWh               <- Battery (MWh) OR BESS MWh OR Battery Energy Storage (MWh)
+      Only fill when BESS / Battery context is present in the row.
+- Battery Injection (MW)    <- Injection (MW) when in BESS context.
+      Note: For BESS, injection is typically SMALLER than drawl.
+      Look for "Injection" or "Inj" in BESS tables.
+- Battery Drawl (MW)        <- Drawl (MW) or Drawal (MW) when in BESS context.
+      Note: For BESS, drawl is typically LARGER than injection.
+      Look for "Drawl" or "Drawal" in BESS tables.
 - Nature of Applicant       <- Nature of Applicant
 - Mode(Criteria for applying) <- Criterion for applying / Criteria for applying / Mode
 - Applied Start of Connectivity sought by developer date
       <- Start Date of Connectivity (As per Application)
+- Date from which additional capacity is to be added
+      <- Date from which additional capacity is to be added
+      <- Additional Capacity Date. Only fill if explicitly present.
 - Application/Submission Date <- Application No. & Date OR Submission Date (date only)
 - GNA Operationalization Date <- near SCoD / SCOD in description text
 - GNA Operationalization (Yes/No) <- derived post-processing; return null here
@@ -121,6 +143,19 @@ Use these value patterns as a FALLBACK to identify which column a piece
 of data belongs to, especially when the header text is unconventional.
 
 ═══════════════════════════════════════════════════════
+BATTERY (BESS) EXTRACTION RULES
+═══════════════════════════════════════════════════════
+When a table row mentions BESS / Battery:
+  - Look for MWh capacity → "Battery MWh"
+  - Look for Injection (MW) → "Battery Injection (MW)"
+  - Look for Drawl (MW) → "Battery Drawl (MW)"
+  - IMPORTANT: Generally, drawl > injection for BESS
+  - If the table has columns like "Injection (MW)" and "Drawl (MW)"
+    alongside BESS mention, map them to Battery Injection/Drawl.
+  - If both BESS and PSP are present in same row, use Battery* for BESS
+    values and PSP* for pump storage values.
+
+═══════════════════════════════════════════════════════
 EXTRACTION RULES (CRITICAL)
 ═══════════════════════════════════════════════════════
 - Extract EVERY visible data row on the page — a page often contains multiple rows.
@@ -148,6 +183,7 @@ SKIP RULES — DO NOT extract rows if:
 - For "GNA Operationalization (Yes/No)" return null (computed in post-processing).
 - For "Status of application..." map wording to: Withdrawn / granted / Revoked.
 - PSP values: fill only when pump storage / PSP wording is explicitly present.
+- Battery values: fill only when BESS / Battery wording is explicitly present.
 - "type" must be one of: Solar, Wind, Hybrid, BESS, Solar + BESS, Hybrid + BESS, Hydro, Hydro+BESS, Thermal, or null.
 
 Return JSON in EXACTLY this shape:
@@ -163,9 +199,14 @@ Return JSON in EXACTLY this shape:
             "LTA Application ID": "0412100008",
             "Application ID under Enhancement 5.2 or revision": null,
             "Application Quantum (MW)(ST II)": "300",
+            "Granted Quantum GNA/LTA(MW)": "300",
+            "Battery MWh": null,
+            "Battery Injection (MW)": null,
+            "Battery Drawl (MW)": null,
             "Nature of Applicant": "Generator (Solar)",
             "Mode(Criteria for applying)": "SECI LOA",
             "Applied Start of Connectivity sought by developer date": "16.04.2026",
+            "Date from which additional capacity is to be added": null,
             "Application/Submission Date": "15.02.2024",
             "GNA Operationalization Date": "31.03.2030",
             "GNA Operationalization (Yes/No)": null,

@@ -1,7 +1,8 @@
 """
 cmets_handler/models.py — Pydantic schemas for CMETS extraction
 =================================================================
-Edit this file to add/remove/rename output columns.
+Edit column_registry.py to add/remove/rename output columns.
+This file defines the Pydantic models that match the column registry.
 """
 
 from __future__ import annotations
@@ -9,32 +10,57 @@ from __future__ import annotations
 from typing import Optional
 from pydantic import BaseModel, ConfigDict, Field
 
+# Import canonical column list from the registry
+from pipeline.cmets_handler.column_registry import CMETS_COLUMNS
+
 
 class MappedRow(BaseModel):
-    """One extracted data row from a CMETS PDF page."""
+    """One extracted data row from a CMETS PDF page.
+
+    Fields map 1:1 to the extraction and derived columns in column_registry.py.
+    """
 
     model_config = ConfigDict(populate_by_name=True)
 
-    project_location:   Optional[str] = Field(None, alias="Project Location")
-    state:              Optional[str] = Field(None, alias="State")
-    substaion:          Optional[str] = Field(None, alias="substaion")
-    voltage:            Optional[str] = Field(None, alias="Voltage")
-    name_of_developers: Optional[str] = Field(None, alias="Name of the developers")
-    type:               Optional[str] = Field(None, alias="type")
-    gna_st2_id:         Optional[str] = Field(None, alias="GNA/ST II Application ID")
-    lta_id:             Optional[str] = Field(None, alias="LTA Application ID")
-    enhancement_id:     Optional[str] = Field(None, alias="Application ID under Enhancement 5.2 or revision")
-    quantum_mw:         Optional[str] = Field(None, alias="Application Quantum (MW)(ST II)")
-    nature_of_applicant:Optional[str] = Field(None, alias="Nature of Applicant")
-    mode_criteria:      Optional[str] = Field(None, alias="Mode(Criteria for applying)")
-    applied_start_date: Optional[str] = Field(None, alias="Applied Start of Connectivity sought by developer date")
-    submission_date:    Optional[str] = Field(None, alias="Application/Submission Date")
-    gna_op_date:        Optional[str] = Field(None, alias="GNA Operationalization Date")
-    gna_op_yesno:       Optional[str] = Field(None, alias="GNA Operationalization (Yes/No)")
-    app_status:         Optional[str] = Field(None, alias="Status of application(Withdrawn / granted. Revoked.)")
-    psp_mwh:            Optional[str] = Field(None, alias="PSP MWh")
-    psp_injection:      Optional[str] = Field(None, alias="PSP Injection (MW)")
-    psp_drawl:          Optional[str] = Field(None, alias="PSP Drawl (MW)")
+    # ── Extraction columns (from PDF page text via LLM) ──────────────────────
+    substation:          Optional[str] = Field(None, alias="Substation")
+    project_location:    Optional[str] = Field(None, alias="Project Location")
+    name_of_developers:  Optional[str] = Field(None, alias="Name of Developers")
+    gna_st2_id:          Optional[str] = Field(None, alias="GNA/ST II Application ID")
+    lta_id:              Optional[str] = Field(None, alias="LTA Application ID")
+    enhancement_id:      Optional[str] = Field(None, alias="Application ID under Enhancement 5.2 or revision")
+    quantum_mw:          Optional[str] = Field(None, alias="Application Quantum (MW)(ST II)")
+    granted_quantum:     Optional[str] = Field(None, alias="Granted Quantum GNA/LTA(MW)")
+
+    # ── Battery (BESS) columns ───────────────────────────────────────────────
+    battery_mwh:         Optional[str] = Field(None, alias="Battery MWh")
+    battery_injection:   Optional[str] = Field(None, alias="Battery Injection (MW)")
+    battery_drawl:       Optional[str] = Field(None, alias="Battery Drawl (MW)")
+
+    # ── PSP (Pump Storage) columns ───────────────────────────────────────────
+    psp_mwh:             Optional[str] = Field(None, alias="PSP MWh")
+    psp_injection:       Optional[str] = Field(None, alias="PSP Injection (MW)")
+    psp_drawl:           Optional[str] = Field(None, alias="PSP Drawl (MW)")
+
+    submission_date:     Optional[str] = Field(None, alias="Application/Submission Date")
+    mode_criteria:       Optional[str] = Field(None, alias="Mode(Criteria for applying)")
+    applied_start_date:  Optional[str] = Field(
+        None,
+        alias="Applied Start of Connectivity sought by developer date"
+              "( start date of connectivity as per the application)",
+    )
+    additional_capacity_date: Optional[str] = Field(None, alias="Date from which additional capacity is to be added")
+    nature_of_applicant: Optional[str] = Field(None, alias="Nature of Applicant")
+    app_status:          Optional[str] = Field(None, alias="Status of application(Withdrawn / granted. Revoked.)")
+    voltage_level:       Optional[str] = Field(None, alias="Voltage level")
+
+    # ── Derived columns ──────────────────────────────────────────────────────
+    state:               Optional[str] = Field(None, alias="State")
+    type:                Optional[str] = Field(None, alias="Type")
+
+    # ── Calculated columns ───────────────────────────────────────────────────
+    gna_op_date:         Optional[str] = Field(None, alias="GNA Operationalization Date")
+    gna_op_yesno:        Optional[str] = Field(None, alias="GNA Operationalization (Yes/No)")
 
 
 class PageResult(BaseModel):
@@ -52,26 +78,3 @@ class PipelineResult(BaseModel):
     pages_skipped:         int
     total_rows:            int
     results:               list[PageResult]
-
-
-# Column order for cmets.xlsx
-CMETS_COLUMNS = [
-    "PDF", "Page Number",
-    # ── Meeting-level metadata (same for all rows from same PDF) ──
-    "CMETS GNA Approved", "CMETS LTA Approved",
-    "CMETS GNA Meeting Date", "CMETS LTA Meeting Date",
-    # ── Row-level extracted data ──
-    "Project Location", "State", "substaion", "Voltage",
-    "Name of the developers",
-    "type",
-    "GNA/ST II Application ID", "LTA Application ID",
-    "Application ID under Enhancement 5.2 or revision",
-    "Application Quantum (MW)(ST II)", "Nature of Applicant",
-    "Mode(Criteria for applying)",
-    "Applied Start of Connectivity sought by developer date"
-    "( start date of connectivity as per the application)",
-    "Application/Submission Date", "GNA Operationalization Date",
-    "GNA Operationalization (Yes/No)",
-    "Status of application(Withdrawn / granted. Revoked.)",
-    "PSP MWh", "PSP Injection (MW)", "PSP Drawl (MW)",
-]
