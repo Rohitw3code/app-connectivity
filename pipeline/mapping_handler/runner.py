@@ -31,7 +31,7 @@ _START_DIR = Path(__file__).resolve().parent.parent.parent
 
 EFFECTIVENESS_OUTPUT_DIR : Path = _START_DIR / "output" / "effectiveness_cache"
 CMETS_EXCEL_PATH         : Path = _START_DIR / "excels" / "cmets.xlsx"
-MAPPED_JSON_PATH         : Path = _START_DIR / "excels" / "effectiveness_mapped.json"
+MAPPED_JSON_PATH         : Path = _START_DIR / "output" / "cmets_effectiveness_mapped.json"
 MAPPED_EXCEL_PATH        : Path = _START_DIR / "excels" / "effectiveness_mapped.xlsx"
 
 

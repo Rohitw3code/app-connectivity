@@ -41,7 +41,7 @@ BAY_OUTPUT_DIR    : Path = _START_DIR / "output" / "bayallocation_cache"
 # Output: Enriched Excel
 BAY_MAPPED_EXCEL  : Path = _START_DIR / "excels" / "cmets_bay_mapped.xlsx"
 # Output: Enriched JSON
-BAY_MAPPED_JSON   : Path = _START_DIR / "excels" / "cmets_bay_mapped.json"
+BAY_MAPPED_JSON   : Path = _START_DIR / "output" / "cmets_bay_mapped.json"
 
 
 # ─── Public API ───────────────────────────────────────────────────────────────
