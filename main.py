@@ -1,9 +1,9 @@
 """
 main.py — Pipeline Entry Point
 ================================
-Run the four-module extraction & mapping pipeline:
+Run the six-module extraction & mapping pipeline:
 
-    python main.py                        # full run (Modules 1 → 2 → 3 → 4)
+    python main.py                        # full run (Modules 1 → 2 → 3 → 4 → 5 → 6)
     python main.py --skip-effectiveness   # Module 1 only
     python main.py --pdf path/to/file.pdf # single PDF (Module 1 only)
     python main.py --mode laptop --api-key sk-...
@@ -18,6 +18,7 @@ Modules
   Module 3 (pipeline/mapping_handler/)            — CMETS × Effectiveness merge
   Module 4 (pipeline/jcc_handler/)                — JCC Meeting PDF extraction
   Module 5 (pipeline/bayallocation_handler/)      — Bay Allocation PDF extraction
+  Module 6 (pipeline/bay_mapping_handler/)        — CMETS × Bay Allocation mapping
 """
 
 from __future__ import annotations
@@ -35,6 +36,7 @@ from pipeline.effectiveness_handler import run_effectiveness_extraction
 from pipeline.mapping_handler       import run_mapping
 from pipeline.jcc_handler           import run_jcc_extraction
 from pipeline.bayallocation_handler import run_bayallocation_extraction
+from pipeline.bay_mapping_handler   import run_bay_mapping
 
 logging.basicConfig(
     level=logging.INFO,
@@ -207,6 +209,19 @@ def main() -> None:
         print(f"\n[Pipeline] ✓ Module 5 complete — {len(bay_df)} entries\n")
     except Exception:
         logging.error("Module 5 failed.")
+        traceback.print_exc()
+
+    # ── Module 6: CMETS × Bay Allocation mapping ─────────────────────────
+    try:
+        bay_mapped_path = run_bay_mapping(
+            cmets_excel_path  = cmets_path,
+            bay_output_dir    = args.bay_output_dir,
+            output_excel_path = str(excels_dir / "cmets_bay_mapped.xlsx"),
+            output_json_path  = str(excels_dir / "cmets_bay_mapped.json"),
+        )
+        print(f"\n[Pipeline] ✓ Module 6 complete → {bay_mapped_path.name}\n")
+    except Exception:
+        logging.error("Module 6 failed.")
         traceback.print_exc()
 
     print("=" * 64)
