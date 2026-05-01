@@ -232,34 +232,31 @@ def norm_dev(v: Optional[str]) -> Optional[str]:
 # ── norm_type ────────────────────────────────────────────────────────────────
 # Valid energy source types (normalised lowercase -> display form)
 _VALID_TYPES: dict[str, str] = {
-    "solar":          "Solar",
-    "wind":           "Wind",
-    "hybrid":         "Hybrid",
-    "bess":           "BESS",
-    "solar + bess":   "Solar + BESS",
-    "solar+bess":     "Solar + BESS",
-    "hybrid + bess":  "Hybrid + BESS",
-    "hybrid+bess":    "Hybrid + BESS",
-    "hydro":          "Hydro",
-    "hydro + bess":   "Hydro+BESS",
-    "hydro+bess":     "Hydro+BESS",
-    "thermal":        "Thermal",
+    "solar":   "Solar",
+    "wind":    "Wind",
+    "hybrid":  "Hybrid",
+    "bess":    "BESS",
+    "hydro":   "Hydro",
+    "thermal": "Thermal",
+    "psp":     "PSP",
 }
 
-
 def norm_type(v: Optional[str]) -> Optional[str]:
-    """Normalise the energy source type to a canonical value."""
+    """Normalise the energy source type to canonical casing while preserving associated values (e.g. '(19)')."""
     v = clean(v)
     if not v:
         return None
-    key = re.sub(r"\s+", " ", v.strip().lower())
-    if key in _VALID_TYPES:
-        return _VALID_TYPES[key]
-    # Fuzzy match: check if any valid type is a substring
+        
+    res = str(v)
     for k, canonical in _VALID_TYPES.items():
-        if k in key:
-            return canonical
-    return v  # return as-is if not recognised
+        pattern = r'\b' + re.escape(k) + r'\b'
+        res = re.sub(pattern, canonical, res, flags=re.IGNORECASE)
+        
+    # Standardize MW casing and clean up spacing around +
+    res = re.sub(r'\bmw\b', 'MW', res, flags=re.IGNORECASE)
+    res = re.sub(r'\s*\+\s*', ' + ', res)
+    
+    return res.strip()
 
 
 # ── norm_voltage ─────────────────────────────────────────────────────────────
