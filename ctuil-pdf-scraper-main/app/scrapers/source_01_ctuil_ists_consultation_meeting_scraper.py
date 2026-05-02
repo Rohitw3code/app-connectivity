@@ -1,6 +1,10 @@
 """
 Scraper for: https://ctuil.in/ists-consultation-meeting
 Downloads PDFs from "Agenda" and "Minutes" columns for each region.
+
+Output layout:
+  uploads/CTUIL-ISTS-CMETS/agenda/   — Agenda PDFs
+  uploads/CTUIL-ISTS-CMETS/minutes/  — Minutes PDFs
 """
 
 import os
@@ -281,12 +285,14 @@ async def main():
 
         grouped = defaultdict(list)
         for rec in filtered:
-            grouped[(rec["region"], rec["doc_type"])].append(rec)
+            grouped[rec["doc_type"]].append(rec)
 
         tasks = []
 
-        for (region, dtype), records in grouped.items():
-            dest_dir = ensure_dir(OUTPUT_DIR, region, dtype)
+        for dtype, records in grouped.items():
+            # Route Agenda -> agenda/  |  Minutes -> minutes/
+            sub_folder = dtype.lower()     # "agenda" or "minutes"
+            dest_dir   = ensure_dir(OUTPUT_DIR, sub_folder)
 
             for idx, rec in enumerate(records, start=1):
                 clean_name = formatted_filename(dtype, rec["url"])

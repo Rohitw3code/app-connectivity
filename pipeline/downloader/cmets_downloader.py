@@ -4,7 +4,9 @@ pipeline/downloader/cmets_downloader.py — CMETS PDF Downloader
 Downloads ISTS Consultation Meeting PDFs (Agenda + Minutes) from CTUIL.
 Source: https://ctuil.in/ists-consultation-meeting
 
-Downloads into: source/cmets_pdfs/
+Downloads into:
+  source/cmets_pdfs/agenda/    — Agenda PDFs
+  source/cmets_pdfs/minutes/   — Minutes PDFs  (used by extraction pipeline)
 Merged from: ctuil-pdf-scraper-main/app/scrapers/source_01_ctuil_ists_consultation_meeting_scraper.py
 """
 
@@ -192,20 +194,31 @@ def download_cmets_pdfs(
     tracker=None,
 ) -> int:
     """
-    Download CMETS PDFs into dest_dir.
+    Download CMETS PDFs into dest_dir, split by document type:
+
+      dest_dir/agenda/   — Agenda PDFs
+      dest_dir/minutes/  — Minutes PDFs  (used by extraction pipeline)
 
     Args:
-        dest_dir: Target directory (e.g. source/cmets_pdfs/)
-        limit: Max PDFs to download. -1 = all, default 5.
+        dest_dir: Root target directory (e.g. source/cmets_pdfs/)
+        limit: Max PDFs to download total. -1 = all, default 5.
         tracker: PipelineTracker instance (optional)
 
     Returns:
         Number of PDFs downloaded.
     """
     dest = Path(dest_dir).resolve()
-    dest.mkdir(parents=True, exist_ok=True)
 
-    already_on_disk = len(list(dest.glob("*.pdf")))
+    agenda_dir  = dest / "agenda"
+    minutes_dir = dest / "minutes"
+    agenda_dir.mkdir(parents=True, exist_ok=True)
+    minutes_dir.mkdir(parents=True, exist_ok=True)
+
+    # Count already-downloaded PDFs across both subfolders
+    already_on_disk = (
+        len(list(agenda_dir.glob("*.pdf")))
+        + len(list(minutes_dir.glob("*.pdf")))
+    )
 
     async def _run():
         headers = {**COMMON_HEADERS, "Referer": BASE_URL}
@@ -225,12 +238,21 @@ def download_cmets_pdfs(
                 logger.info("[CMETS DL] No new PDFs to download.")
                 return 0
 
-            # Prepare download tasks — save directly to dest_dir as flat files
+            # Prepare download tasks — route into agenda/ or minutes/ subfolder
             tasks = []
-            for idx, rec in enumerate(filtered, start=1):
-                clean_name = _formatted_filename(rec["doc_type"], rec["url"])
-                numbered = f"{idx:02d}_{clean_name}"
-                file_dest = str(dest / numbered)
+            # Track per-type index for sequential numbering
+            type_counters: dict[str, int] = {"Agenda": 0, "Minutes": 0}
+
+            for rec in filtered:
+                dtype = rec["doc_type"]          # "Agenda" or "Minutes"
+                sub_dir = agenda_dir if dtype == "Agenda" else minutes_dir
+
+                type_counters[dtype] += 1
+                idx = type_counters[dtype]
+
+                clean_name = _formatted_filename(dtype, rec["url"])
+                numbered   = f"{idx:02d}_{clean_name}"
+                file_dest  = str(sub_dir / numbered)
 
                 if os.path.exists(file_dest):
                     continue

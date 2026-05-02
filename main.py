@@ -82,15 +82,17 @@ _START_DIR = Path(__file__).resolve().parent
 
 REQUIRED_FOLDERS = [
     # (path, description)
-    (_START_DIR / "source" / "cmets_pdfs",           "CMETS PDF input"),
-    (_START_DIR / "source" / "effectiveness_pdfs",   "Effectiveness PDF input"),
-    (_START_DIR / "source" / "jcc_pdfs",             "JCC PDF input"),
-    (_START_DIR / "output" / "cmets_cache",           "CMETS JSON cache"),
-    (_START_DIR / "output" / "effectiveness_cache",   "Effectiveness JSON cache"),
-    (_START_DIR / "output" / "jcc_cache",             "JCC JSON cache"),
-    (_START_DIR / "source" / "bayallocation",          "Bay Allocation PDF input"),
-    (_START_DIR / "output" / "bayallocation_cache",    "Bay Allocation JSON cache"),
-    (_START_DIR / "excels",                           "Generated Excel reports"),
+    (_START_DIR / "source" / "cmets_pdfs",                  "CMETS PDF root"),
+    (_START_DIR / "source" / "cmets_pdfs" / "agenda",        "CMETS Agenda PDFs"),
+    (_START_DIR / "source" / "cmets_pdfs" / "minutes",       "CMETS Minutes PDFs (extraction input)"),
+    (_START_DIR / "source" / "effectiveness_pdfs",           "Effectiveness PDF input"),
+    (_START_DIR / "source" / "jcc_pdfs",                     "JCC PDF input"),
+    (_START_DIR / "output" / "cmets_cache",                  "CMETS JSON cache"),
+    (_START_DIR / "output" / "effectiveness_cache",          "Effectiveness JSON cache"),
+    (_START_DIR / "output" / "jcc_cache",                    "JCC JSON cache"),
+    (_START_DIR / "source" / "bayallocation",                "Bay Allocation PDF input"),
+    (_START_DIR / "output" / "bayallocation_cache",          "Bay Allocation JSON cache"),
+    (_START_DIR / "excels",                                  "Generated Excel reports"),
 ]
 
 
@@ -285,17 +287,19 @@ def _run_extraction(runtime, tracker: PipelineTracker, args) -> None:
 
     # Check if Excel exists; if tracked but missing on disk, regenerate
     if not Path(cmets_excel).exists():
-        print("\n[Pipeline] Module 1 — CMETS extraction")
+        print("\n[Pipeline] Module 1 — CMETS extraction (Minutes only)")
 
-        # Register extractions for tracking
-        cmets_src = Path(args.source_dir or str(_START_DIR / "source" / "cmets_pdfs"))
+        # Use only the minutes/ subfolder for extraction
+        cmets_src = Path(
+            args.source_dir or str(_START_DIR / "source" / "cmets_pdfs" / "minutes")
+        )
         for pdf in sorted(cmets_src.glob("*.pdf")):
             if not tracker.is_extracted("cmets", pdf.name):
                 dl_id = tracker.get_download_id("cmets", pdf.name)
                 ext_id = tracker.register_extraction("cmets", pdf.name, dl_id)
 
         cmets_path = run_cmets_extraction(
-            source_dir = args.source_dir,
+            source_dir = str(cmets_src),
             output_dir = args.output_dir,
             excel_path = cmets_excel,
             single_pdf = args.pdf,
