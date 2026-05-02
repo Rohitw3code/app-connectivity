@@ -18,11 +18,26 @@ import aiohttp
 
 logger = logging.getLogger(__name__)
 
-DOWNLOAD_SEM = asyncio.Semaphore(20)
+# Reduced concurrency for VM environments (unstable / throttled networks)
+DOWNLOAD_SEM = asyncio.Semaphore(5)
 
 COMMON_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.5",
+    "Connection": "keep-alive",
 }
+
+
+def make_connector() -> aiohttp.TCPConnector:
+    """Return a VM-friendly TCP connector with conservative settings."""
+    return aiohttp.TCPConnector(
+        limit=10,
+        limit_per_host=3,
+        ttl_dns_cache=300,
+        enable_cleanup_closed=True,
+        force_close=False,
+    )
 
 
 def safe_filename(url: str) -> str:
@@ -43,14 +58,20 @@ async def download_file(
     session: aiohttp.ClientSession,
     url: str,
     dest: str,
-    timeout: int = 90,
+    timeout: int = 180,
 ) -> bool:
     """Download a single file. Returns True on success."""
     async with DOWNLOAD_SEM:
-        for attempt in range(3):
+        for attempt in range(5):
             try:
                 async with session.get(
-                    url, timeout=aiohttp.ClientTimeout(total=timeout)
+                    url,
+                    timeout=aiohttp.ClientTimeout(
+                        total=timeout,
+                        connect=60,
+                        sock_connect=60,
+                        sock_read=120,
+                    ),
                 ) as resp:
                     if resp.status != 200:
                         logger.warning("[SKIP %d] %s", resp.status, url)
@@ -64,9 +85,14 @@ async def download_file(
                 logger.info("[OK] %s → %s", os.path.basename(dest), dest)
                 return True
 
+            except (aiohttp.ClientConnectorError, aiohttp.ServerTimeoutError,
+                    aiohttp.ClientPayloadError, OSError) as e:
+                wait = min(5 * (2 ** attempt), 60)
+                logger.warning("[RETRY %d/5] %s — %s (wait %ds)", attempt + 1, url, e, wait)
+                await asyncio.sleep(wait)
             except Exception as e:
-                logger.warning("[RETRY %d] %s → %s", attempt + 1, url, e)
-                await asyncio.sleep(2 ** attempt)
+                logger.warning("[RETRY %d/5] %s — unexpected: %s", attempt + 1, url, e)
+                await asyncio.sleep(5)
 
     logger.error("[FAILED] %s", url)
     return False
@@ -75,7 +101,7 @@ async def download_file(
 async def download_batch(
     session: aiohttp.ClientSession,
     tasks: list[tuple[str, str]],
-    chunk_size: int = 15,
+    chunk_size: int = 3,
 ) -> int:
     """Download a batch of (url, dest) pairs. Returns count of successful downloads."""
     success = 0
@@ -84,7 +110,7 @@ async def download_batch(
             *[download_file(session, url, dest) for url, dest in tasks[i : i + chunk_size]]
         )
         success += sum(1 for r in results if r)
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(1.5)  # polite pause between chunks on VM
     return success
 
 

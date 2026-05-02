@@ -23,7 +23,7 @@ import aiohttp
 
 from pipeline.downloader.base import (
     download_file, download_batch,
-    apply_download_limit, COMMON_HEADERS,
+    apply_download_limit, COMMON_HEADERS, make_connector,
 )
 
 logger = logging.getLogger(__name__)
@@ -81,63 +81,99 @@ async def _extract_links():
         logger.error("[BAY DL] Playwright not installed.")
         return {}
 
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
-        page = await browser.new_page()
-        await page.goto(BASE_URL)
-        await page.wait_for_selector("table")
+    logger.info("[BAY DL] Extracting links from %s ...", BASE_URL)
 
-        data = await page.evaluate("""() => {
-            const result = {
-                bays: [],
-                non_re: [],
-                re_substations: [],
-                proposed_re: []
-            };
+    for attempt in range(3):
+        try:
+            async with async_playwright() as p:
+                browser = await p.chromium.launch(
+                    headless=True,
+                    args=[
+                        "--no-sandbox",
+                        "--disable-setuid-sandbox",
+                        "--disable-dev-shm-usage",
+                        "--disable-gpu",
+                    ],
+                )
+                context = await browser.new_context(
+                    ignore_https_errors=True,
+                    user_agent=COMMON_HEADERS["User-Agent"],
+                )
+                page = await context.new_page()
+                page.set_default_navigation_timeout(120_000)
+                page.set_default_timeout(60_000)
 
-            const tables = Array.from(document.querySelectorAll('table'));
+                try:
+                    await page.goto(BASE_URL, wait_until="domcontentloaded", timeout=120_000)
+                except Exception:
+                    logger.warning("[BAY DL] domcontentloaded timed out; trying 'load'...")
+                    await page.goto(BASE_URL, wait_until="load", timeout=120_000)
 
-            tables.forEach(table => {
-                const text = table.innerText.toLowerCase();
+                try:
+                    await page.wait_for_selector("table", timeout=60_000)
+                except Exception:
+                    logger.warning("[BAY DL] Table selector timed out; using page content anyway.")
 
-                if (text.includes("connectivity margin in ists substations")) {
-                    const rows = table.querySelectorAll("tr");
-                    rows.forEach(row => {
-                        const cells = row.querySelectorAll("td");
-                        if (cells.length >= 4) {
-                            const nonRe = cells[2].querySelector("a");
-                            if (nonRe && nonRe.href.toLowerCase().includes("pdf")) {
-                                result.non_re.push(nonRe.href);
-                            }
-                            const reSub = cells[3].querySelector("a");
-                            if (reSub && reSub.href.toLowerCase().includes("pdf")) {
-                                result.re_substations.push(reSub.href);
-                            }
+                data = await page.evaluate("""() => {
+                    const result = {
+                        bays: [],
+                        non_re: [],
+                        re_substations: [],
+                        proposed_re: []
+                    };
+
+                    const tables = Array.from(document.querySelectorAll('table'));
+
+                    tables.forEach(table => {
+                        const text = table.innerText.toLowerCase();
+
+                        if (text.includes("connectivity margin in ists substations")) {
+                            const rows = table.querySelectorAll("tr");
+                            rows.forEach(row => {
+                                const cells = row.querySelectorAll("td");
+                                if (cells.length >= 4) {
+                                    const nonRe = cells[2].querySelector("a");
+                                    if (nonRe && nonRe.href.toLowerCase().includes("pdf")) {
+                                        result.non_re.push(nonRe.href);
+                                    }
+                                    const reSub = cells[3].querySelector("a");
+                                    if (reSub && reSub.href.toLowerCase().includes("pdf")) {
+                                        result.re_substations.push(reSub.href);
+                                    }
+                                }
+                            });
+                        } else if (text.includes("proposed re integration")) {
+                            const rows = table.querySelectorAll("tr");
+                            rows.forEach(row => {
+                                const link = row.querySelector("a");
+                                if (link && link.href.toLowerCase().includes("pdf")) {
+                                    result.proposed_re.push(link.href);
+                                }
+                            });
+                        } else if (text.includes("allocation of bays")) {
+                            const links = table.querySelectorAll("a[href]");
+                            links.forEach(a => {
+                                if (a.href.toLowerCase().includes("pdf")) {
+                                    result.bays.push(a.href);
+                                }
+                            });
                         }
                     });
-                } else if (text.includes("proposed re integration")) {
-                    const rows = table.querySelectorAll("tr");
-                    rows.forEach(row => {
-                        const link = row.querySelector("a");
-                        if (link && link.href.toLowerCase().includes("pdf")) {
-                            result.proposed_re.push(link.href);
-                        }
-                    });
-                } else if (text.includes("allocation of bays")) {
-                    const links = table.querySelectorAll("a[href]");
-                    links.forEach(a => {
-                        if (a.href.toLowerCase().includes("pdf")) {
-                            result.bays.push(a.href);
-                        }
-                    });
-                }
-            });
 
-            return result;
-        }""")
+                    return result;
+                }""")
 
-        await browser.close()
-        return data
+                await browser.close()
+                logger.info("[BAY DL] Link extraction succeeded on attempt %d.", attempt + 1)
+                return data
+
+        except Exception as e:
+            logger.warning("[BAY DL] Attempt %d/3 failed: %s", attempt + 1, e)
+            if attempt < 2:
+                await asyncio.sleep(10)
+
+    logger.error("[BAY DL] All link extraction attempts failed.")
+    return {}
 
 
 # ─── Public API ───────────────────────────────────────────────────────────────
@@ -164,7 +200,6 @@ def download_bayallocation_pdfs(
     already_on_disk = len(list(dest.glob("*.pdf")))
 
     async def _run():
-        logger.info("[BAY DL] Extracting links from %s ...", BASE_URL)
         links_data = await _extract_links()
 
         if not links_data:
@@ -205,7 +240,11 @@ def download_bayallocation_pdfs(
 
         logger.info("[BAY DL] Downloading %d PDFs...", len(tasks))
 
-        async with aiohttp.ClientSession(headers=COMMON_HEADERS) as session:
+        async with aiohttp.ClientSession(
+            headers=COMMON_HEADERS,
+            connector=make_connector(),
+            timeout=aiohttp.ClientTimeout(total=180, connect=60, sock_connect=60, sock_read=120),
+        ) as session:
             downloaded = await download_batch(session, tasks)
 
         # Register in tracker

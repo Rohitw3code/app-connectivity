@@ -24,7 +24,7 @@ from bs4 import BeautifulSoup
 
 from pipeline.downloader.base import (
     download_file, download_batch,
-    apply_download_limit, COMMON_HEADERS,
+    apply_download_limit, COMMON_HEADERS, make_connector,
 )
 
 logger = logging.getLogger(__name__)
@@ -51,16 +51,52 @@ async def _fetch_rendered_html() -> str:
         return ""
 
     logger.info("[EFF DL] Launching headless browser...")
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
-        page = await browser.new_page()
-        await page.goto(PAGE_URL, wait_until="domcontentloaded", timeout=30000)
-        await page.wait_for_selector("table a[href]", timeout=15000)
-        html = await page.content()
-        await browser.close()
 
-    logger.info("[EFF DL] Page rendered.")
-    return html
+    # Try up to 3 times — VM networks can time out on first attempt
+    for attempt in range(3):
+        try:
+            async with async_playwright() as p:
+                browser = await p.chromium.launch(
+                    headless=True,
+                    args=[
+                        "--no-sandbox",
+                        "--disable-setuid-sandbox",
+                        "--disable-dev-shm-usage",
+                        "--disable-gpu",
+                    ],
+                )
+                context = await browser.new_context(
+                    ignore_https_errors=True,
+                    user_agent=COMMON_HEADERS["User-Agent"],
+                )
+                page = await context.new_page()
+                page.set_default_navigation_timeout(120_000)  # 2 min
+                page.set_default_timeout(60_000)
+
+                try:
+                    await page.goto(PAGE_URL, wait_until="domcontentloaded", timeout=120_000)
+                except Exception:
+                    logger.warning("[EFF DL] domcontentloaded timed out; trying 'load'...")
+                    await page.goto(PAGE_URL, wait_until="load", timeout=120_000)
+
+                # Wait for table links (up to 60s)
+                try:
+                    await page.wait_for_selector("table a[href]", timeout=60_000)
+                except Exception:
+                    logger.warning("[EFF DL] Selector wait timed out; using page content anyway.")
+
+                html = await page.content()
+                await browser.close()
+                logger.info("[EFF DL] Page rendered on attempt %d.", attempt + 1)
+                return html
+
+        except Exception as e:
+            logger.warning("[EFF DL] Attempt %d/3 failed: %s", attempt + 1, e)
+            if attempt < 2:
+                await asyncio.sleep(10)
+
+    logger.error("[EFF DL] All attempts to render page failed.")
+    return ""
 
 
 # ─── Extract Links ────────────────────────────────────────────────────────────
@@ -168,7 +204,11 @@ def download_effectiveness_pdfs(
 
         logger.info("[EFF DL] Downloading %d PDFs...", len(tasks))
 
-        async with aiohttp.ClientSession(headers={**COMMON_HEADERS, "Referer": PAGE_URL}) as session:
+        async with aiohttp.ClientSession(
+            headers={**COMMON_HEADERS, "Referer": PAGE_URL},
+            connector=make_connector(),
+            timeout=aiohttp.ClientTimeout(total=180, connect=60, sock_connect=60, sock_read=120),
+        ) as session:
             downloaded = await download_batch(session, tasks)
 
         # Register in tracker

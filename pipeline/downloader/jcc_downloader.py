@@ -22,7 +22,7 @@ from bs4 import BeautifulSoup
 
 from pipeline.downloader.base import (
     safe_filename, download_file, download_batch,
-    apply_download_limit, COMMON_HEADERS,
+    apply_download_limit, COMMON_HEADERS, make_connector,
 )
 
 logger = logging.getLogger(__name__)
@@ -43,7 +43,10 @@ REGION_FOLDER_MAP = {
     "er":  "Eastern Region",
 }
 
-PAGE_SEM = asyncio.Semaphore(10)
+PAGE_SEM = asyncio.Semaphore(3)  # Reduced for VM environments
+
+# Per-request timeout for HTML fetching (seconds)
+_HTML_TIMEOUT = aiohttp.ClientTimeout(total=90, connect=30, sock_connect=30, sock_read=60)
 
 
 # ─── Filename Logic (from original scraper) ──────────────────────────────────
@@ -122,9 +125,23 @@ def _formatted_filename(doc_type: str, url: str) -> str:
 # ─── Parsing ──────────────────────────────────────────────────────────────────
 
 async def _fetch_html(session, url):
+    """Fetch HTML with retry for VM network instability."""
     async with PAGE_SEM:
-        async with session.get(url) as resp:
-            return await resp.text()
+        last_exc = None
+        for attempt in range(4):
+            try:
+                async with session.get(url, timeout=_HTML_TIMEOUT) as resp:
+                    return await resp.text()
+            except (aiohttp.ClientConnectorError, aiohttp.ServerTimeoutError, OSError) as e:
+                last_exc = e
+                wait = 5 * (2 ** attempt)
+                logger.warning("[JCC DL] Fetch attempt %d/4 failed (%s) — retry in %ds", attempt + 1, e, wait)
+                await asyncio.sleep(wait)
+            except Exception as e:
+                last_exc = e
+                logger.warning("[JCC DL] Fetch attempt %d/4 unexpected error: %s", attempt + 1, e)
+                await asyncio.sleep(5)
+        raise last_exc
 
 
 def _get_total_pages(html: str) -> int:
@@ -229,7 +246,13 @@ def download_jcc_pdfs(
 
     async def _run():
         headers = {**COMMON_HEADERS, "Referer": BASE_URL}
-        async with aiohttp.ClientSession(headers=headers) as session:
+        connector = make_connector()
+        session_timeout = aiohttp.ClientTimeout(total=300, connect=60, sock_connect=60, sock_read=120)
+        async with aiohttp.ClientSession(
+            headers=headers,
+            connector=connector,
+            timeout=session_timeout,
+        ) as session:
             logger.info("[JCC DL] Collecting PDF links...")
             collected = await _collect_all(session)
 
