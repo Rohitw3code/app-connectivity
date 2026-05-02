@@ -1,167 +1,196 @@
 # JCC Handler — Module 4
 
-## Purpose
-Extracts structured table data from **JCC (Joint Coordination Committee)
-Meeting** PDF documents. Then runs two post-extraction logic stages:
-the **Output Layer** (effectiveness → JCC matching) and **Layer 4**
-(CMETS-first JCC mapping by application IDs).
+## What It Does
 
-## Data Flow
-
-```
-source/jcc_pdfs/                     ← Input: JCC meeting PDFs (recursive)
-    ├── ER/
-    │   ├── Agenda/                    Agenda PDFs
-    │   └── Minutes/                   Minutes-of-Meeting PDFs
-    ├── NR/
-    │   ├── Agenda/
-    │   └── Minutes/
-    └── …  (NER, SR, WR)
-
-          ↓  (pdfplumber table detection)
-
-output/jcc_cache/                    ← Cache: per-PDF JSON
-    ├── MoM_36th_JCC_NR.json
-    └── Minutes_of_46th_JCC_ER.json
-
-          ↓  (flatten + format)
-
-excels/jcc_extracted.xlsx            ← Stage 1 Output: raw JCC data
-excels/jcc_output_layer.xlsx         ← Stage 2 Output: 4-column GNA/TGNA
-excels/jcc_extracted_mapped.xlsx     ← Stage 2 Output: full matched data
-excels/cmets_jcc_mapped.xlsx         ← Stage 3 Output: CMETS + GNA/TGNA
-```
-
-## Sub-Layer Architecture
-
-| File                 | Role | Type |
-|----------------------|------|------|
-| `models.py`          | Keyword gate, column fragments, canonical column names | Schema |
-| `extraction.py`      | Page gate, table detection, positional row parsing | Extraction |
-| `runner.py`          | Orchestration: discover → cache → extract → output layer → layer 4 | I/O |
-| `jcc_output_layer.py`| **Logic**: Output Layer (eff→JCC matching) + Layer 4 (CMETS→JCC mapping) + GNA/TGNA computation | Logic |
+Reads **JCC (Joint Coordination Committee) Meeting** PDF documents and extracts structured table data about connectivity schedules. Then runs two post-extraction logic stages to compute **GNA** and **TGNA** values by cross-referencing with Effectiveness and CMETS data.
 
 ---
 
-## Stage 1 — JCC PDF Extraction (Extraction)
+## Input → Output
 
-**Type**: Pure extraction (PDF → structured data)
-**Output**: `jcc_extracted.xlsx`
+| | Path |
+|---|---|
+| **Input PDFs** | `source/jcc_pdfs/` — organized by region (ER, NR, NER, SR, WR) and type (Agenda, Minutes) |
+| **Cache (JSON)** | `output/jcc_cache/<pdf_name>.json` |
+| **Output Excel (Stage 1)** | `excels/jcc_extracted.xlsx` — raw JCC extracted data |
+| **Output Excel (Stage 2)** | `excels/jcc_output_layer.xlsx` — Effectiveness→JCC matched GNA/TGNA |
+| **Output Excel (Stage 2)** | `excels/jcc_extracted_mapped.xlsx` — matched subset |
+| **Output Excel (Stage 3)** | `excels/cmets_jcc_mapped.xlsx` — CMETS rows + GNA/TGNA |
 
-### Pipeline
+---
 
-1. **PDF Discovery** (`runner.py`):
-   Recursively scans `source/jcc_pdfs/` for all `*.pdf` files.
+## Stage 1 — JCC PDF Extraction
 
-2. **Cache Check** (`runner.py`):
-   If `output/jcc_cache/<stem>.json` exists, the PDF is skipped.
+### How Extraction Works
 
-3. **Keyword Gate** (`extraction.py → page_passes_gate()`):
-   Page must contain ALL of: "Pooling", "Quantum", "Connectivity".
+#### Step 1 — PDF Discovery
 
-4. **Table Detection** (`extraction.py → extract_page_data()`):
-   - pdfplumber extracts all tables
-   - Header row matching ≥3 target column fragments → selected
-   - Data rows positionally mapped to canonical column names
+Recursively scans `source/jcc_pdfs/` for all `*.pdf` files across all regional sub-folders.
+
+#### Step 2 — Cache Check
+
+If a JSON cache already exists for a PDF, it is skipped.
+
+#### Step 3 — Page Gate (Keyword Filter)
+
+A page must contain **ALL three** of these keywords to pass:
+- "Pooling"
+- "Quantum"
+- "Connectivity"
+
+Pages that fail are skipped.
+
+#### Step 4 — Table Detection
+
+- pdfplumber extracts all tables on the page
+- The system checks if any table header row matches at least **3 target column fragments** (e.g. "pooling station", "connectivity quantum", "schedule")
+- Matching table → data rows are positionally mapped to column names
 
 ### Columns Extracted
 
-| Column | Description |
-|--------|-------------|
-| `pooling_station` | Pooling / interconnection station name |
-| `connectivity_applicant` | Developer name + application IDs |
-| `connectivity_quantum_mw` | Applied connectivity MW |
-| `schedule_as_per_current_jcc` | Current JCC schedule (MW values + dates) |
-| `connectivity_start_date_under_gna` | GNA status ("Effective" or pending text) |
-| (and more: sr_no, gen_comm_schedule_prev_jcc, ists_scope, remarks) |
+| Column | Data Source | What It Contains |
+|---|---|---|
+| **pooling_station** | JCC PDF table | Pooling / interconnection station name |
+| **connectivity_applicant** | JCC PDF table | Developer name + application IDs in the same cell |
+| **connectivity_quantum_mw** | JCC PDF table | Applied connectivity quantum in MW |
+| **schedule_as_per_current_jcc** | JCC PDF table | Current JCC schedule — contains MW values and dates |
+| **connectivity_start_date_under_gna** | JCC PDF table | GNA status text (e.g. "Effective" or "Connectivity likely to be operationalized...") |
+| **sr_no** | JCC PDF table | Serial number |
+| **gen_comm_schedule_prev_jcc** | JCC PDF table | Previous JCC generation commissioning schedule |
+| **ists_scope** | JCC PDF table | ISTS scope details |
+| **remarks** | JCC PDF table | Remarks text |
 
 ---
 
-## Stage 2 — JCC Output Layer (Logic)
+## Stage 2 — JCC Output Layer (Effectiveness → JCC Matching)
 
-**Type**: Logic operation — cross-references effectiveness with JCC data
-**Output**: `jcc_output_layer.xlsx` (4 columns), `jcc_extracted_mapped.xlsx`
-**File**: `jcc_output_layer.py → run_jcc_output_layer()`
+### Purpose
 
-### Pipeline
+Cross-reference **Effectiveness** data with **JCC** extracted data to compute GNA and TGNA values for each developer.
 
-```
-Effectiveness data (Module 2)  +  JCC extracted data (Stage 1)
- │
- ├→ Step 1: Load effectiveness records
- ├→ Step 2: Flatten JCC data into rows
- ├→ Step 3: Match each effectiveness row → JCC row
- │   Priority: Application IDs (GNA/LTA/5.2) → Fuzzy match (substation + developer)
- ├→ Step 4: Compute GNA / TGNA from matched JCC row
- └→ Step 5: Write output Excels
-```
+### Data Sources
 
-### Key Logic Functions
+| Data Source | What Is Used |
+|---|---|
+| **Effectiveness PDF** (Module 2 output) | Developer name, substation, application IDs (GNA/LTA/5.2) |
+| **JCC PDF** (Stage 1 output) | Pooling station, connectivity applicant, GNA status, schedule MW values |
 
-| Function | What it does |
-|----------|-------------|
-| `find_best_jcc_match()` | Weighted fuzzy: substation↔pooling (0.5) + developer↔applicant (0.5) |
-| `_row_id_match_count()` | Counts how many application IDs match in a JCC row |
-| `compute_gna_tgna()` | Computes GNA and TGNA from matched JCC row |
+### How Matching Works
 
-### GNA / TGNA Logic
+For each effectiveness row, the system tries to find the best matching JCC row:
 
 ```
-connectivity_start_date_under_gna column:
- │
- ├→ Contains "Effective" (not "not effective"):
- │   └→ GNA = sum of ALL MW values in schedule_as_per_current_jcc
- │
- └→ Does NOT contain "Effective":
-     └→ TGNA = sum of MW values tagged "(Commissioned)" in schedule
+┌──────────────────────────────────────────────────────────────────────┐
+│  MATCHING STRATEGY (priority order)                                  │
+│                                                                      │
+│  PRIORITY 1: Application ID Matching                                 │
+│  ──────────────────────────────────                                  │
+│  Check if any GNA, LTA, or Enhancement 5.2 ID from the              │
+│  effectiveness record appears anywhere in the JCC row values.        │
+│  The JCC row with the most ID hits wins.                             │
+│                                                                      │
+│  PRIORITY 2: Fuzzy Name Matching (fallback)                          │
+│  ──────────────────────────────────────────                           │
+│  Weighted similarity score:                                          │
+│    Substation ↔ Pooling Station       (weight: 50%)                  │
+│    Developer Name ↔ Connectivity Applicant (weight: 50%)             │
+│    Substring containment bonus: +15%                                 │
+│    Minimum threshold: 45% combined score                             │
+└──────────────────────────────────────────────────────────────────────┘
 ```
 
----
-
-## Stage 3 — Layer 4: CMETS-first JCC Mapping (Logic)
-
-**Type**: Logic operation — maps CMETS rows to JCC by application IDs
-**Output**: `cmets_jcc_mapped.xlsx`
-**File**: `jcc_output_layer.py → run_layer4_excel()`
-
-### Pipeline
+### GNA / TGNA Computation Rules
 
 ```
-cmets_extracted.xlsx (Module 1)  +  JCC extracted data (Stage 1)
- │
- ├→ Step 1: Load CMETS sheet (all rows, all columns)
- ├→ Step 2: Flatten JCC data
- ├→ Step 3: For each CMETS row, search JCC connectivity_applicant:
- │   Priority 1: GNA Application ID → search connectivity_applicant
- │   Priority 2: LTA Application ID → search connectivity_applicant
- │   Priority 3: 5.2 Enhancement ID → search connectivity_applicant
- ├→ Step 4: Compute GNA / TGNA from matched JCC row
- └→ Step 5: Write Excel (all CMETS columns + TGNA + GNA + Match Source)
+┌──────────────────────────────────────────────────────────────────────┐
+│  Read "connectivity_start_date_under_gna" from matched JCC row       │
+│                                                                      │
+│  ┌────────────────────────────────────────────────────────────────┐  │
+│  │  CASE 1: Contains "Effective"                                  │  │
+│  │  (but NOT "not effective" or "non-effective")                  │  │
+│  │                                                                │  │
+│  │  → GNA = SUM of ALL MW values in "schedule_as_per_current_jcc"│  │
+│  │                                                                │  │
+│  │  Data source: JCC PDF → schedule column                        │  │
+│  │  Example: "300 MW: 15.06.2025" → GNA = 300                    │  │
+│  └────────────────────────────────────────────────────────────────┘  │
+│                                                                      │
+│  ┌────────────────────────────────────────────────────────────────┐  │
+│  │  CASE 2: Does NOT contain "Effective"                          │  │
+│  │  (e.g. "Connectivity likely to be operationalized upon         │  │
+│  │   commissioning of required Transmission system")              │  │
+│  │                                                                │  │
+│  │  → TGNA = SUM of MW values tagged "(Commissioned)" only       │  │
+│  │                                                                │  │
+│  │  Data source: JCC PDF → schedule column                        │  │
+│  │  Example: "111.8 MW: 19.05.2025 (Commissioned)"               │  │
+│  │           "88.2 MW: 01.06.2025 (Commissioned)"                 │  │
+│  │           → TGNA = 111.8 + 88.2 = 200                         │  │
+│  └────────────────────────────────────────────────────────────────┘  │
+│                                                                      │
+│  Note: GNA and TGNA are mutually exclusive — exactly one is          │
+│  computed per matched row (or both are null if data is insufficient).│
+└──────────────────────────────────────────────────────────────────────┘
 ```
-
-### Key Logic Functions
-
-| Function | What it does |
-|----------|-------------|
-| `_id_in_connectivity_applicant()` | Searches for normalised ID in JCC connectivity_applicant column |
-| `_find_jcc_by_ids()` | Cascading search: GNA → LTA → 5.2, returns first match + source label |
-| `compute_gna_tgna()` | Same GNA/TGNA computation as Stage 2 |
 
 ### Output Columns
 
-All CMETS columns (preserved from cmets_extracted.xlsx) plus:
-- **TGNA** — Commissioned MW (when status ≠ "Effective")
-- **GNA** — All MW (when status = "Effective")
-- **Match Source** — Which ID matched: "GNA", "LTA", "5.2", or empty
+| Column | Data Source | What It Contains |
+|---|---|---|
+| **Developer Name** | Effectiveness PDF (or JCC if eff missing) | Developer/applicant name |
+| **Substation** | Effectiveness PDF (or JCC if eff missing) | Substation name |
+| **GNA/ST II Application ID** | Effectiveness PDF | GNA application ID |
+| **LTA Application ID** | Effectiveness PDF | LTA application ID |
+| **Application ID under Enhancement 5.2 or revision** | Effectiveness PDF | Enhancement 5.2 ID |
+| **TGNA** | Computed from JCC schedule | Sum of Commissioned MW |
+| **GNA** | Computed from JCC schedule | Sum of all MW (when Effective) |
 
 ---
 
-## How to Change
+## Stage 3 — Layer 4: CMETS-First JCC Mapping
 
-- **Change target keywords**: Edit `models.py → REQUIRED_KEYWORDS`
-- **Change column header matching**: Edit `models.py → TARGET_COLUMN_FRAGMENTS`
-- **Change table detection logic**: Edit `extraction.py → _is_target_table()`
-- **Change row parsing**: Edit `extraction.py → extract_page_data()`
-- **Change effectiveness→JCC matching**: Edit `jcc_output_layer.py → find_best_jcc_match()`
-- **Change CMETS→JCC ID search**: Edit `jcc_output_layer.py → _find_jcc_by_ids()`
-- **Change GNA/TGNA computation**: Edit `jcc_output_layer.py → compute_gna_tgna()`
+### Purpose
+
+Start from the **CMETS** extracted sheet and find matching JCC rows to add GNA/TGNA data.
+
+### Data Sources
+
+| Data Source | What Is Used |
+|---|---|
+| **CMETS PDF** (Module 1 output) | All columns, especially GNA/LTA/5.2 Application IDs |
+| **JCC PDF** (Stage 1 output) | `connectivity_applicant` column (searched for matching IDs) |
+
+### How Matching Works
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│  For each CMETS row:                                                 │
+│                                                                      │
+│  Step 1: Take GNA Application ID from CMETS                         │
+│     → Search for this ID inside JCC "connectivity_applicant" text    │
+│     → If found → MATCH (source = "GNA")                             │
+│                                                                      │
+│  Step 2: If GNA fails, take LTA Application ID from CMETS           │
+│     → Search inside JCC "connectivity_applicant" text                │
+│     → If found → MATCH (source = "LTA")                             │
+│                                                                      │
+│  Step 3: If LTA fails, take Enhancement 5.2 ID from CMETS           │
+│     → Search inside JCC "connectivity_applicant" text                │
+│     → If found → MATCH (source = "5.2")                             │
+│                                                                      │
+│  Search is case-insensitive, whitespace-normalized, and uses         │
+│  substring matching (ID must be at least 3 characters).              │
+│                                                                      │
+│  When matched → compute GNA / TGNA using same rules as Stage 2.     │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+### What Gets Added
+
+| Column | Data Source | What It Contains |
+|---|---|---|
+| **GNA** | Computed from JCC schedule | Sum of all MW values (when JCC status = "Effective") |
+| **TGNA** | Computed from JCC schedule | Sum of Commissioned MW (when JCC status ≠ "Effective") |
+| **Match Source** | Computed | Which ID was used: "GNA", "LTA", "5.2", or empty |
+
+The output preserves **all original CMETS columns** and appends these three.
