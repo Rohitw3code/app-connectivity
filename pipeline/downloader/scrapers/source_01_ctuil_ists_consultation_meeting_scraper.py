@@ -3,8 +3,8 @@ Scraper for: https://ctuil.in/ists-consultation-meeting
 Downloads PDFs from "Agenda" and "Minutes" columns for each region.
 
 Output layout:
-  uploads/CTUIL-ISTS-CMETS/agenda/   — Agenda PDFs
-  uploads/CTUIL-ISTS-CMETS/minutes/  — Minutes PDFs
+    source_output/CTUIL-ISTS-CMETS/agenda/   — Agenda PDFs
+    source_output/CTUIL-ISTS-CMETS/minutes/  — Minutes PDFs
 """
 
 import os
@@ -15,17 +15,21 @@ from bs4 import BeautifulSoup
 from urllib.parse import urljoin, unquote
 from collections import defaultdict
 
+from pipeline.downloader.pdf_cache import get_pdf_cache
+
 # ==== Config ====
 BASE_URL   = "https://ctuil.in/ists-consultation-meeting"
 SITE_ROOT  = "https://ctuil.in"
-OUTPUT_DIR = "uploads/CTUIL-ISTS-CMETS"
+OUTPUT_DIR = "source_output/CTUIL-ISTS-CMETS"
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0",
     "Referer": BASE_URL,
 }
 
-INDEX_FILE = "download_index.txt"
+CACHE_DB_PATH = None
+CACHE_SOURCE_KEY = "cmets"
+CACHE_SOURCE_NAME = "CTUIL-ISTS-CMETS"
 
 REGION_MAP = {
     "northern region":      "Northern Region",
@@ -51,6 +55,10 @@ def ensure_dir(*parts) -> str:
     path = os.path.join(*parts)
     os.makedirs(path, exist_ok=True)
     return path
+
+
+def get_cache():
+    return get_pdf_cache(CACHE_DB_PATH, CACHE_SOURCE_KEY, CACHE_SOURCE_NAME)
 
 # ==== Robust Rename Logic ====
 def extract_meeting_label(stem: str, doc_type: str) -> str:
@@ -114,18 +122,6 @@ def formatted_filename(doc_type: str, url: str) -> str:
     return f"{doc_type}_{label}{ext}"
 
 
-# ==== Index Logic ====
-def load_index():
-    if not os.path.exists(INDEX_FILE):
-        return set()
-    with open(INDEX_FILE, "r", encoding="utf-8") as f:
-        return set(line.strip() for line in f)
-
-def save_index(index):
-    with open(INDEX_FILE, "w", encoding="utf-8") as f:
-        for url in sorted(index):
-            f.write(url + "\n")
-
 # ==== Network ====
 async def fetch_html(session, url):
     async with PAGE_SEM:
@@ -138,10 +134,11 @@ async def fetch_html(session, url):
                 await asyncio.sleep(2 ** attempt)
     return ""
 
-async def download(session, url, dest, index):
+async def download(session, url, dest, *, region=None, doc_type=None):
     async with DOWNLOAD_SEM:
-
-        if url in index:
+        cache = get_cache()
+        pdf_name = os.path.basename(dest)
+        if cache.is_cached(pdf_name, pdf_type=doc_type, pdf_path=dest):
             return
 
         for attempt in range(3):
@@ -155,7 +152,7 @@ async def download(session, url, dest, index):
                 with open(dest, "wb") as f:
                     f.write(data)
 
-                index.add(url)
+                cache.record_download(pdf_name=pdf_name, pdf_type=doc_type, pdf_path=dest)
                 return  # no print (faster)
 
             except Exception:
@@ -268,9 +265,6 @@ def print_summary(counts):
 # ==== Main ====
 async def main():
     async with aiohttp.ClientSession(headers=HEADERS) as session:
-
-        index = load_index()
-
         print("Collecting...\n")
         all_records = await collect_all(session)
 
@@ -299,7 +293,15 @@ async def main():
                 numbered = f"{idx:02d}_{clean_name}"
                 dest = os.path.join(dest_dir, numbered)
 
-                tasks.append(download(session, rec["url"], dest, index))
+                tasks.append(
+                    download(
+                        session,
+                        rec["url"],
+                        dest,
+                        region=rec["region"],
+                        doc_type=dtype,
+                    )
+                )
 
         print(f"Total files to download: {len(tasks)}\n")
 
@@ -307,8 +309,6 @@ async def main():
         for i in range(0, len(tasks), CHUNK):
             await asyncio.gather(*tasks[i:i+CHUNK])
             await asyncio.sleep(0.5)
-
-        save_index(index)
 
     print("\nDone.")
 

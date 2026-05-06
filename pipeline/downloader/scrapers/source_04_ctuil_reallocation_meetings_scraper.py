@@ -10,8 +10,14 @@ import aiohttp
 from urllib.parse import unquote, urljoin, quote
 from playwright.async_api import async_playwright
 
+from pipeline.downloader.pdf_cache import get_pdf_cache
+
 BASE_URL = "https://www.ctuil.in/reallocation_meetings"
-BASE_DIR = "uploads/CTUIL-Reallocation-Meetings"
+BASE_DIR = "source_output/CTUIL-Reallocation-Meetings"
+
+CACHE_DB_PATH = None
+CACHE_SOURCE_KEY = "reallocation_meetings"
+CACHE_SOURCE_NAME = "CTUIL-Reallocation-Meetings"
 
 DOWNLOAD_SEM = asyncio.Semaphore(10)
 
@@ -38,6 +44,10 @@ def strip_leading_timestamp(filename: str) -> str:
 
 def display_name_from_url(url: str) -> str:
     return strip_leading_timestamp(safe_filename(url))
+
+
+def get_cache():
+    return get_pdf_cache(CACHE_DB_PATH, CACHE_SOURCE_KEY, CACHE_SOURCE_NAME)
 
 
 def ensure_doc_type_dir(region: str, doc_type: str) -> str:
@@ -160,10 +170,14 @@ async def extract_all_regions(page):
     return all_links
 
 # ==== Download Pipeline ====
-async def async_download(session, url, dest):
+async def async_download(session, url, dest, *, region=None, doc_type=None):
     async with DOWNLOAD_SEM:
         try:
             if os.path.exists(dest):
+                return
+            cache = get_cache()
+            pdf_name = os.path.basename(dest)
+            if cache.is_cached(pdf_name, pdf_path=dest):
                 return
 
             async with session.get(url, ssl=False) as resp:
@@ -177,6 +191,8 @@ async def async_download(session, url, dest):
 
             with open(dest, "wb") as f:
                 f.write(data)
+
+            cache.record_download(pdf_name=pdf_name, pdf_path=dest)
 
             print(f"Saved: {dest}")
 
@@ -226,7 +242,7 @@ async def main():
             # Apply incremental logic
             to_download = apply_incremental_update(dest_dir, urls)
             for url, dest in to_download:
-                tasks.append(async_download(session, url, dest))
+                tasks.append(async_download(session, url, dest, region=region, doc_type=doc_type))
 
         await asyncio.gather(*tasks)
 

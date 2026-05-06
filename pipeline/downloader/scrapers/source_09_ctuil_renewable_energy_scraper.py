@@ -9,8 +9,14 @@ import aiohttp
 from urllib.parse import unquote
 from playwright.async_api import async_playwright
 
+from pipeline.downloader.pdf_cache import get_pdf_cache
+
 BASE_URL = "https://www.ctuil.in/renewable-energy"
-BASE_DIR = "uploads/CTUIL-Renewable-Energy"
+BASE_DIR = "source_output/CTUIL-Renewable-Energy"
+
+CACHE_DB_PATH = None
+CACHE_SOURCE_KEY = "bayallocation"
+CACHE_SOURCE_NAME = "CTUIL-Renewable-Energy"
 
 DOWNLOAD_SEM = asyncio.Semaphore(10)
 
@@ -60,6 +66,10 @@ def safe_filename(url: str) -> str:
 
     # fallback (safe)
     return f"{stem}{ext}" if stem else f"file{ext}"
+
+
+def get_cache():
+    return get_pdf_cache(CACHE_DB_PATH, CACHE_SOURCE_KEY, CACHE_SOURCE_NAME)
 
 # ===== Extract Links =====
 async def extract_links():
@@ -138,10 +148,15 @@ async def extract_links():
         return data
 
 # ===== Download =====
-async def async_download(session, url, dest):
+async def async_download(session, url, dest, *, section=None):
     async with DOWNLOAD_SEM:
         try:
             if os.path.exists(dest):
+                return
+
+            cache = get_cache()
+            pdf_name = os.path.basename(dest)
+            if cache.is_cached(pdf_name, pdf_path=dest):
                 return
 
             async with session.get(url) as resp:
@@ -152,6 +167,8 @@ async def async_download(session, url, dest):
 
             with open(dest, "wb") as f:
                 f.write(data)
+
+            cache.record_download(pdf_name=pdf_name, pdf_path=dest)
 
             print(f"Saved: {os.path.basename(dest)}")
 
@@ -214,7 +231,7 @@ async def main():
             print(f"New files: {len(planned)}")
 
             for url, dest in planned:
-                all_tasks.append(async_download(session, url, dest))
+                all_tasks.append(async_download(session, url, dest, section=section))
 
         await asyncio.gather(*all_tasks)
 

@@ -15,6 +15,7 @@ from types import ModuleType
 from typing import Iterable
 
 from pipeline.downloader.catalog import SCRAPER_SPECS, SPECS_BY_KEY, ScraperSpec
+from pipeline.downloader.pdf_cache import get_pdf_cache
 
 _START_DIR = Path(__file__).resolve().parent.parent.parent
 DEFAULT_DOWNLOAD_ROOT = _START_DIR / "output"
@@ -38,6 +39,24 @@ def _count_pdfs(root: Path) -> set[Path]:
     if not root.exists():
         return set()
     return {p.resolve() for p in root.rglob("*.pdf") if p.is_file()}
+
+
+def _cache_db_path(output_root: Path, spec: ScraperSpec) -> Path:
+    return output_root.parent / "pipeline_tracker.db"
+
+
+def _seed_cache_from_existing_pdfs(spec: ScraperSpec, output_dir: Path, cache_db_path: Path) -> int:
+    existing_pdfs = _count_pdfs(output_dir)
+    cache = get_pdf_cache(cache_db_path, spec.key, Path(spec.output_dir).name)
+    entries = []
+    for pdf in existing_pdfs:
+        try:
+            relative = pdf.relative_to(output_dir)
+            pdf_type = relative.parts[0] if len(relative.parts) > 1 else ""
+        except Exception:
+            pdf_type = ""
+        entries.append((pdf.name, pdf_type, str(pdf)))
+    return cache.record_existing_pdfs(entries)
 
 
 def _register_new_downloads(tracker, handler: str, before: set[Path], after: set[Path]) -> None:
@@ -182,15 +201,16 @@ def _build_limit_patches(module: ModuleType, spec: ScraperSpec, limit: int) -> d
     return patches
 
 
-def _build_output_patches(module: ModuleType, spec: ScraperSpec) -> dict[str, object]:
+def _build_output_patches(module: ModuleType, spec: ScraperSpec, output_root: Path) -> dict[str, object]:
     patches: dict[str, object] = {}
     if spec.output_attr:
         patches[spec.output_attr] = spec.output_dir
-    if spec.key == "cmets":
-        patches["INDEX_FILE"] = str(Path(spec.output_dir) / "download_index.txt")
+    patches["CACHE_DB_PATH"] = str(_cache_db_path(output_root, spec))
+    patches["CACHE_SOURCE_KEY"] = spec.key
+    patches["CACHE_SOURCE_NAME"] = Path(spec.output_dir).name
     if spec.key == "monitoring_connectivity":
         patches["TARGETS"] = [
-            {**target, "dest_dir": str(Path("uploads/CTUIL-Revocations-PDFs") / Path(target["dest_dir"]).name)}
+            {**target, "dest_dir": str(Path("source_output/CTUIL-Revocations-PDFs") / Path(target["dest_dir"]).name)}
             for target in module.TARGETS
         ]
     return patches
@@ -227,12 +247,15 @@ def run_scraper(
     with _pushd(root):
         module = importlib.import_module(module_name)
         before = _count_pdfs(output_dir)
+        seeded = _seed_cache_from_existing_pdfs(spec, output_dir, _cache_db_path(root, spec))
         patches = {
-            **_build_output_patches(module, spec),
+            **_build_output_patches(module, spec, root),
             **_build_limit_patches(module, spec, limit),
         }
         started = time.time()
         print(f"\n  [{spec.label}] -> {output_dir}")
+        if seeded:
+            print(f"  [{spec.label}] cached existing PDFs: {seeded}")
         with _patched_attrs(module, patches):
             _run_module_main(module, spec, pfccl_query)
         after = _count_pdfs(output_dir)

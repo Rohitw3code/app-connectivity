@@ -9,8 +9,14 @@ import aiohttp
 from urllib.parse import unquote
 from playwright.async_api import async_playwright
 
+from pipeline.downloader.pdf_cache import get_pdf_cache
+
 BASE_URL = "https://cea.nic.in/psp___a_i/transmission-system-for-integration-of-over-500-gw-non-fossil-capacity-by-2030/?lang=en"
-BASE_DIR = "uploads/CEA-500GW"
+BASE_DIR = "source_output/CEA-500GW"
+
+CACHE_DB_PATH = None
+CACHE_SOURCE_KEY = "potential_re_zones"
+CACHE_SOURCE_NAME = "CEA-500GW"
 
 DOWNLOAD_SEM = asyncio.Semaphore(10)
 
@@ -20,6 +26,10 @@ def safe_filename(url: str) -> str:
     name = unquote(url.split("/")[-1].split("?")[0])
     name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", name)
     return name.strip("._") or "file.pdf"
+
+
+def get_cache():
+    return get_pdf_cache(CACHE_DB_PATH, CACHE_SOURCE_KEY, CACHE_SOURCE_NAME)
 
 
 # ===== Extract Links =====
@@ -60,6 +70,11 @@ async def async_download(session, url, dest):
             if os.path.exists(dest):
                 return
 
+            cache = get_cache()
+            pdf_name = os.path.basename(dest)
+            if cache.is_cached(pdf_name, pdf_path=dest):
+                return
+
             async with session.get(url, ssl=False) as resp:
                 if resp.status != 200:
                     print(f"Failed {resp.status}: {url}")
@@ -69,6 +84,8 @@ async def async_download(session, url, dest):
 
             with open(dest, "wb") as f:
                 f.write(data)
+
+            cache.record_download(pdf_name=pdf_name, pdf_path=dest)
 
             print(f"Saved: {os.path.basename(dest)}")
 

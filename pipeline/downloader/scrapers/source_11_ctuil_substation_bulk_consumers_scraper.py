@@ -10,8 +10,14 @@ import aiohttp
 from urllib.parse import unquote
 from playwright.async_api import async_playwright
 
+from pipeline.downloader.pdf_cache import get_pdf_cache
+
 BASE_URL = "https://ctuil.in/substation-bulk-consumers"
-BASE_DIR = "uploads/CTUIL-Bulk-Consumers"
+BASE_DIR = "source_output/CTUIL-Bulk-Consumers"
+
+CACHE_DB_PATH = None
+CACHE_SOURCE_KEY = "substation_bulk_consumers"
+CACHE_SOURCE_NAME = "CTUIL-Bulk-Consumers"
 
 DOWNLOAD_SEM = asyncio.Semaphore(10)
 
@@ -72,6 +78,10 @@ def safe_filename(url: str) -> str:
     return f"Bulk Consumer{ext}"
 
 
+def get_cache():
+    return get_pdf_cache(CACHE_DB_PATH, CACHE_SOURCE_KEY, CACHE_SOURCE_NAME)
+
+
 # ===== Extract Links =====
 async def extract_links():
     async with async_playwright() as p:
@@ -110,6 +120,11 @@ async def async_download(session, url, dest):
             if os.path.exists(dest):
                 return
 
+            cache = get_cache()
+            pdf_name = os.path.basename(dest)
+            if cache.is_cached(pdf_name, pdf_path=dest):
+                return
+
             async with session.get(url, ssl=False) as resp:
                 if resp.status != 200:
                     print(f"Failed {resp.status}: {url}")
@@ -119,6 +134,8 @@ async def async_download(session, url, dest):
 
             with open(dest, "wb") as f:
                 f.write(data)
+
+            cache.record_download(pdf_name=pdf_name, pdf_path=dest)
 
             print(f"Saved: {os.path.basename(dest)}")
 

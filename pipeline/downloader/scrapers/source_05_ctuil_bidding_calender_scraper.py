@@ -11,8 +11,14 @@ import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, unquote
 
+from pipeline.downloader.pdf_cache import get_pdf_cache
+
 BASE_URL = "https://www.ctuil.in/bidding-calendar"
-DOWNLOAD_DIR = "uploads/CTUIL-Bidding-Calendar"
+DOWNLOAD_DIR = "source_output/CTUIL-Bidding-Calendar"
+
+CACHE_DB_PATH = None
+CACHE_SOURCE_KEY = "bidding_calendar"
+CACHE_SOURCE_NAME = "CTUIL-Bidding-Calendar"
 
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
@@ -93,11 +99,20 @@ def fetch_pdf_links():
 
     return pdf_links
 
+
+def get_cache():
+    return get_pdf_cache(CACHE_DB_PATH, CACHE_SOURCE_KEY, CACHE_SOURCE_NAME)
+
 # ==== Download ====
 async def async_download(session, url, dest):
     async with DOWNLOAD_SEM:
         try:
             if os.path.exists(dest):
+                return
+
+            cache = get_cache()
+            pdf_name = os.path.basename(dest)
+            if cache.is_cached(pdf_name, pdf_path=dest):
                 return
 
             async with session.get(url) as resp:
@@ -107,6 +122,8 @@ async def async_download(session, url, dest):
 
             with open(dest, "wb") as f:
                 f.write(data)
+
+            cache.record_download(pdf_name=pdf_name, pdf_path=dest)
 
             print(f"[OK] {os.path.basename(dest)}")
 

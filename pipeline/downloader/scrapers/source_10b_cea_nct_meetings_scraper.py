@@ -10,8 +10,14 @@ import aiohttp
 from urllib.parse import unquote
 from playwright.async_api import async_playwright
 
+from pipeline.downloader.pdf_cache import get_pdf_cache
+
 BASE_URL = "https://cea.nic.in/comm-trans/national-committee-on-transmission/?lang=en"
-BASE_DIR = "uploads/CEA-NCT-Minutes"
+BASE_DIR = "source_output/CEA-NCT-Minutes"
+
+CACHE_DB_PATH = None
+CACHE_SOURCE_KEY = "nct_meetings"
+CACHE_SOURCE_NAME = "CEA-NCT-Minutes"
 
 DOWNLOAD_SEM = asyncio.Semaphore(10)
 
@@ -52,6 +58,10 @@ def safe_filename(url: str) -> str:
         return f"{num}{suffix}_NCT_MoM{ext}"
 
     return f"{stem}{ext}" if stem else f"file{ext}"
+
+
+def get_cache():
+    return get_pdf_cache(CACHE_DB_PATH, CACHE_SOURCE_KEY, CACHE_SOURCE_NAME)
 
 # ===== Extract Links =====
 async def extract_links():
@@ -95,10 +105,15 @@ async def extract_links():
         return data
 
 # ===== Download =====
-async def async_download(session, url, dest):
+async def async_download(session, url, dest, *, title: str | None = None):
     async with DOWNLOAD_SEM:
         try:
             if os.path.exists(dest):
+                return
+
+            cache = get_cache()
+            pdf_name = os.path.basename(dest)
+            if cache.is_cached(pdf_name, pdf_path=dest):
                 return
 
             async with session.get(url) as resp:
@@ -110,6 +125,8 @@ async def async_download(session, url, dest):
 
             with open(dest, "wb") as f:
                 f.write(data)
+
+            cache.record_download(pdf_name=pdf_name, pdf_path=dest)
 
             print(f"Saved: {os.path.basename(dest)}")
 
@@ -141,7 +158,7 @@ def reorder_and_plan(dest_dir, items):
             if old_path != new_path:
                 os.rename(old_path, new_path)
         else:
-            tasks.append((url, new_path))
+            tasks.append((item, new_path))
 
         counter += 1
 
@@ -162,7 +179,10 @@ async def main():
 
         print(f"New files to download: {len(planned)}")
 
-        tasks = [async_download(session, url, dest) for url, dest in planned]
+        tasks = [
+            async_download(session, item["url"], dest, title=item.get("title"))
+            for item, dest in planned
+        ]
         await asyncio.gather(*tasks)
 
     print("\nDone")

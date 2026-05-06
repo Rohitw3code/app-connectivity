@@ -13,6 +13,8 @@ import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, unquote
 
+from pipeline.downloader.pdf_cache import get_pdf_cache
+
 BASE_URL = "https://www.ctuil.in/revocations"
 
 # Keep folder names exactly as requested.
@@ -20,16 +22,20 @@ TARGETS = [
     {
         "name": "Expected Revocation due to Non-Compliance of 24.6 of GNA Regulation",
         "column_index": 1,
-        "dest_dir": "uploads/CTUIL-Revocations-PDFs/Expected Revocation Under 24.6",
+    "dest_dir": "source_output/CTUIL-Revocations-PDFs/Expected Revocation Under 24.6",
     },
     {
         "name": "Connectivity/Grantees Excluded from Expected Revocation list",
         "column_index": 3,
-        "dest_dir": "uploads/CTUIL-Revocations-PDFs/Connectivity Gratees Excluded From Revocation",
+    "dest_dir": "source_output/CTUIL-Revocations-PDFs/Connectivity Gratees Excluded From Revocation",
     },
 ]
 
 MAX_WORKERS = 10
+
+CACHE_DB_PATH = None
+CACHE_SOURCE_KEY = "monitoring_connectivity"
+CACHE_SOURCE_NAME = "CTUIL-Revocations-PDFs"
 
 
 def safe_filename(url: str) -> str:
@@ -82,6 +88,10 @@ def safe_filename(url: str) -> str:
 
     return f"{stem}{ext}" if stem else f"file{ext}"
 
+
+def get_cache():
+    return get_pdf_cache(CACHE_DB_PATH, CACHE_SOURCE_KEY, CACHE_SOURCE_NAME)
+
 def fetch_soup() -> BeautifulSoup:
     response = requests.get(BASE_URL, timeout=30)
     response.raise_for_status()
@@ -115,9 +125,14 @@ def fetch_pdf_links_from_column(soup: BeautifulSoup, column_index: int) -> list[
 
     return pdf_links
 
-def download_one(url: str, dest: str) -> None:
+def download_one(url: str, dest: str, *, target_name: str | None = None) -> None:
     try:
         if os.path.exists(dest):
+            return
+
+        cache = get_cache()
+        pdf_name = os.path.basename(dest)
+        if cache.is_cached(pdf_name, pdf_type=target_name, pdf_path=dest):
             return
 
         resp = requests.get(url, timeout=60)
@@ -127,6 +142,8 @@ def download_one(url: str, dest: str) -> None:
 
         with open(dest, "wb") as f:
             f.write(resp.content)
+
+        cache.record_download(pdf_name=pdf_name, pdf_type=target_name, pdf_path=dest)
 
         print(f"[OK] {os.path.basename(dest)}")
 
@@ -180,7 +197,10 @@ def process_target(
 
     if planned:
         with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
-            futures = [pool.submit(download_one, url, dest) for url, dest in planned]
+            futures = [
+                pool.submit(download_one, url, dest, target_name=name)
+                for url, dest in planned
+            ]
             for _ in as_completed(futures):
                 pass
 

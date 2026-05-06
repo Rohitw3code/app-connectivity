@@ -11,9 +11,15 @@ import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, unquote
 
+from pipeline.downloader.pdf_cache import get_pdf_cache
+
 # ==== Config ====
 BASE_URL = "https://www.ctuil.in/gna2022updates"
-DOWNLOAD_DIR = "uploads/CTUIL-GNA-Connectivity-Fresh"
+DOWNLOAD_DIR = "source_output/CTUIL-GNA-Connectivity-Fresh"
+
+CACHE_DB_PATH = None
+CACHE_SOURCE_KEY = "gna_connectivity_fresh"
+CACHE_SOURCE_NAME = "CTUIL-GNA-Connectivity-Fresh"
 
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 DOWNLOAD_SEM = asyncio.Semaphore(10)
@@ -65,11 +71,21 @@ def fetch_connectivity_fresh_links() -> list[dict]:
     return results
 
 
+def get_cache():
+    return get_pdf_cache(CACHE_DB_PATH, CACHE_SOURCE_KEY, CACHE_SOURCE_NAME)
+
+
 # ==== Download ====
-async def async_download(session: aiohttp.ClientSession, url: str, dest: str):
+async def async_download(session: aiohttp.ClientSession, url: str, dest: str, *, month: str | None = None):
     async with DOWNLOAD_SEM:
         try:
             if os.path.exists(dest):
+                print(f"[SKIP] {os.path.basename(dest)}")
+                return
+
+            cache = get_cache()
+            pdf_name = os.path.basename(dest)
+            if cache.is_cached(pdf_name, pdf_path=dest):
                 print(f"[SKIP] {os.path.basename(dest)}")
                 return
 
@@ -82,6 +98,8 @@ async def async_download(session: aiohttp.ClientSession, url: str, dest: str):
 
             with open(dest, "wb") as f:
                 f.write(data)
+
+            cache.record_download(pdf_name=pdf_name, pdf_path=dest)
 
             print(f"[OK] {os.path.basename(dest)}")
 
@@ -142,7 +160,7 @@ def reorder_and_plan(dest_dir: str, entries: list[dict]) -> list[tuple[str, str]
                 print(f"[SHIFT] {old_name} -> {new_name}")
         else:
             # New month — queue for download
-            tasks.append((entry["url"], new_path))
+            tasks.append((entry, new_path))
 
     return tasks
 
@@ -158,7 +176,10 @@ async def main():
     print(f"[INFO] New files to download: {len(planned)}")
 
     async with aiohttp.ClientSession() as session:
-        coros = [async_download(session, url, dest) for url, dest in planned]
+        coros = [
+            async_download(session, entry["url"], dest, month=entry.get("month"))
+            for entry, dest in planned
+        ]
         await asyncio.gather(*coros)
 
     print("\nDone.")

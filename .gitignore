@@ -29,6 +29,7 @@ page_chunks/
 
 # ─── Output / cache folders (generated at runtime) ────────────────────────────
 output/
+source_output/
 output/cmets_cache/
 output/effectiveness_cache/
 output/jcc_cache/
@@ -58,6 +59,12 @@ final_output.xlsx
 # ─── SQLite tracker database (runtime generated) ──────────────────────────────
 pipeline_tracker.db
 *.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+*.sqlite-wal
+*.sqlite-shm
 
 # ─── Standalone scraper upload output ─────────────────────────────────────────
 uploads/

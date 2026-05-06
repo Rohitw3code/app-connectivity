@@ -11,9 +11,15 @@ import aiohttp
 from urllib.parse import unquote
 from bs4 import BeautifulSoup
 
+from pipeline.downloader.pdf_cache import get_pdf_cache
+
 PAGE_URL   = "https://ctuil.in/regenerators"
 BASE_URL   = "https://ctuil.in"
-TARGET_DIR = "uploads/CTUIL-Regenerators-Effective-Date-wise"
+TARGET_DIR = "source_output/CTUIL-Regenerators-Effective-Date-wise"
+
+CACHE_DB_PATH = None
+CACHE_SOURCE_KEY = "effectiveness"
+CACHE_SOURCE_NAME = "CTUIL-Regenerators-Effective-Date-wise"
 
 DOWNLOAD_SEM = asyncio.Semaphore(10)
 
@@ -37,6 +43,10 @@ def canonical_display_name(month: str) -> str:
 
 def make_display_name(month: str, url: str) -> str:
     return canonical_display_name(month)
+
+
+def get_cache():
+    return get_pdf_cache(CACHE_DB_PATH, CACHE_SOURCE_KEY, CACHE_SOURCE_NAME)
 
 # ==== Fetch Page ====
 async def fetch_rendered_html() -> str:
@@ -101,9 +111,13 @@ def extract_links(html: str) -> list:
     return results
 
 # ==== Download ====
-async def async_download(session, url: str, dest: str):
+async def async_download(session, url: str, dest: str, *, month: str | None = None):
     async with DOWNLOAD_SEM:
         try:
+            cache = get_cache()
+            pdf_name = os.path.basename(dest)
+            if cache.is_cached(pdf_name, pdf_path=dest):
+                return
             async with session.get(url) as resp:
                 if resp.status != 200:
                     print(f"[SKIP {resp.status}] {url}")
@@ -113,6 +127,7 @@ async def async_download(session, url: str, dest: str):
             os.makedirs(os.path.dirname(dest), exist_ok=True)
             with open(dest, "wb") as f:
                 f.write(data)
+            cache.record_download(pdf_name=pdf_name, pdf_path=dest)
             print(f"[DOWNLOADED] {dest}")
 
         except Exception as e:
@@ -168,7 +183,7 @@ def reorder_and_plan(dest_dir: str, ordered_links: list) -> list:
                 print(f"[OK]     {new_fname}")
         else:
             print(f"[NEW]    {new_fname}")
-            to_download.append((url, new_path))
+            to_download.append((month, url, new_path))
 
     # Remove files no longer listed on site
     for display_name, fname in existing_map.items():
@@ -205,7 +220,7 @@ async def main():
         return
 
     async with aiohttp.ClientSession(headers=HEADERS) as session:
-        tasks = [async_download(session, url, dest) for url, dest in to_download]
+        tasks = [async_download(session, url, dest, month=month) for month, url, dest in to_download]
         await asyncio.gather(*tasks)
 
     print("\nDone.")

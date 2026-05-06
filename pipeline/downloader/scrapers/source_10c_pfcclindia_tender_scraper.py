@@ -13,6 +13,8 @@ import unicodedata
 from pathlib import Path
 from urllib.parse import urljoin, urlparse
 
+from pipeline.downloader.pdf_cache import get_pdf_cache
+
 try:
     from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
 except ImportError:
@@ -29,6 +31,10 @@ UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 )
+
+CACHE_DB_PATH = None
+CACHE_SOURCE_KEY = "pfcclindia_tender"
+CACHE_SOURCE_NAME = "PFCCL-INDIA-TENDER"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # KEYWORDS — matched against child link TEXT only (not URL)
@@ -233,12 +239,22 @@ def make_folder_name(user_input: str, max_len: int = 60) -> str:
     return folder[:max_len]
 
 
+def get_cache():
+    return get_pdf_cache(CACHE_DB_PATH, CACHE_SOURCE_KEY, CACHE_SOURCE_NAME)
+
+
 def download_pdf(
     url: str,
     dest: Path,
     session: requests.Session,
+    *,
+    metadata: dict | None = None,
 ) -> bool:
     dest.parent.mkdir(parents=True, exist_ok=True)
+    cache = get_cache()
+    if cache.is_cached(dest.name, pdf_path=dest):
+        print(f"         ✓  Cached (Skipped)")
+        return False
     try:
         r = session.get(url, stream=True, timeout=60)
         r.raise_for_status()
@@ -246,6 +262,7 @@ def download_pdf(
             for chunk in r.iter_content(65536):
                 fh.write(chunk)
         kb = dest.stat().st_size // 1024
+        cache.record_download(pdf_name=dest.name, pdf_path=dest)
         print(f"         ✓  {dest.name}  ({kb} KB)")
         return True
     except Exception as exc:
@@ -344,7 +361,18 @@ def run(user_input: str, output_dir: Path):
                     else:
                         print(f"         ✓  Already exists (Skipped)")
                 else:
-                    ok = download_pdf(pdf["url"], dest, session)
+                    ok = download_pdf(
+                        pdf["url"],
+                        dest,
+                        session,
+                        metadata={
+                            "tender_title": entry["title"],
+                            "tender_sr_no": entry["sr_no"],
+                            "link_text": pdf["text"],
+                            "keyword": keyword_in_text(pdf["text"]),
+                            "folder": folder_name,
+                        },
+                    )
                     if ok:
                         total_downloaded += 1
                     time.sleep(0.4)
@@ -363,8 +391,8 @@ def main():
     )
     ap.add_argument("--query", "-q", default=None,
         help="Substring of the tender title to match (exact, no breakdown)")
-    ap.add_argument("--output", "-o", default="./uploads/PFCCL-INDIA-TENDER",
-        help="Master output directory  (default: ./uploads/PFCCL-INDIA-TENDER)")
+    ap.add_argument("--output", "-o", default="./source_output/PFCCL-INDIA-TENDER",
+        help="Master output directory  (default: ./source_output/PFCCL-INDIA-TENDER)")
     args = ap.parse_args()
 
     user_input = args.query

@@ -11,9 +11,15 @@ import aiohttp
 from urllib.parse import urljoin, unquote
 from bs4 import BeautifulSoup
 
+from pipeline.downloader.pdf_cache import get_pdf_cache
+
 # ==== Config ====
 BASE_URL = "https://ctuil.in/ists-joint-coordination-meeting"
-OUTPUT_DIR = "uploads/CTUIL-ISTS-JCC"
+OUTPUT_DIR = "source_output/CTUIL-ISTS-JCC"
+
+CACHE_DB_PATH = None
+CACHE_SOURCE_KEY = "jcc"
+CACHE_SOURCE_NAME = "CTUIL-ISTS-JCC"
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0",
@@ -150,6 +156,10 @@ def ensure_region_dir(region: str) -> str:
 
     return new_dir
 
+
+def get_cache():
+    return get_pdf_cache(CACHE_DB_PATH, CACHE_SOURCE_KEY, CACHE_SOURCE_NAME)
+
 # ==== Fetch HTML ====
 async def async_fetch(session, url):
     async with PAGE_SEM:
@@ -157,9 +167,13 @@ async def async_fetch(session, url):
             return await resp.text()
 
 # ==== Download File ====
-async def async_download(session, url, dest):
+async def async_download(session, url, dest, *, region=None, doc_type=None):
     async with DOWNLOAD_SEM:
         try:
+            cache = get_cache()
+            pdf_name = os.path.basename(dest)
+            if cache.is_cached(pdf_name, pdf_path=dest):
+                return
             async with session.get(url) as resp:
                 if resp.status != 200:
                     print(f"[SKIP {resp.status}] {url}")
@@ -169,6 +183,7 @@ async def async_download(session, url, dest):
             os.makedirs(os.path.dirname(dest), exist_ok=True)
             with open(dest, "wb") as f:
                 f.write(data)
+            cache.record_download(pdf_name=pdf_name, pdf_path=dest)
             print(f"[OK] {dest}")
 
         except Exception as e:
@@ -309,7 +324,9 @@ async def main():
                 urls = docs[doc_type]
                 dest_dir = os.path.join(region_dir, doc_type)
                 for url, dest in reorder_files(dest_dir, urls, doc_type):
-                    download_tasks.append(async_download(session, url, dest))
+                    download_tasks.append(
+                        async_download(session, url, dest, region=region, doc_type=doc_type)
+                    )
 
         print(f"\nDownloading {len(download_tasks)} files...")
         await asyncio.gather(*download_tasks)

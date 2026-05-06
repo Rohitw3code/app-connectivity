@@ -16,7 +16,11 @@ from requests.exceptions import RequestException
 
 BASE_URL = "https://cea.nic.in/transmission-reports/?lang=en"
 AJAX_URL = "https://cea.nic.in/wp-admin/admin-ajax.php"
-BASE_DIR = "uploads/CTUIL-Transmission-Reports"
+BASE_DIR = "source_output/CTUIL-Transmission-Reports"
+
+CACHE_DB_PATH = None
+CACHE_SOURCE_KEY = "transmission_reports"
+CACHE_SOURCE_NAME = "CTUIL-Transmission-Reports"
 MAX_DOWNLOAD_WORKERS = 5
 MAX_RETRIES = 4
 
@@ -162,6 +166,11 @@ def download_pdf(session, item):
         filename = item["filename"]
         path = os.path.join(folder, filename)
 
+        from pipeline.downloader.pdf_cache import get_pdf_cache
+        cache = get_pdf_cache(CACHE_DB_PATH, CACHE_SOURCE_KEY, CACHE_SOURCE_NAME)
+        if cache.is_cached(filename, pdf_path=path):
+            return
+
         if os.path.exists(path):
             print(f"Skipping: {path}")
             return
@@ -173,6 +182,7 @@ def download_pdf(session, item):
                 if resp.status_code == 200:
                     with open(path, "wb") as f:
                         f.write(resp.content)
+                    cache.record_download(pdf_name=filename, pdf_path=path)
                     print(f"Downloaded -> {path}")
                     return
                 last_error = f"HTTP {resp.status_code}"
