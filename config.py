@@ -21,9 +21,10 @@ MODEL = "gpt-4o-mini"
 EXECUTION_TARGET = "vm"   # default: use VM script mode (change to "laptop" for direct API)
 
 # DOWNLOAD_LIMIT:
-#   > 0  -> download up to N PDFs per handler
+#   > 0  -> download up to N PDFs per scraper/type
 #   = -1 -> download all available PDFs
-DOWNLOAD_LIMIT = 5  # default: 5 PDFs per handler
+DOWNLOAD_LIMIT = 5  # default: 5 PDFs per scraper/type
+DOWNLOAD_ALL = False  # True downloads every available PDF and ignores DOWNLOAD_LIMIT
 
 
 @dataclass(frozen=True)
@@ -34,7 +35,8 @@ class RuntimeConfig:
     vm_mode: bool
     api_key: str
     llm_script_path: Optional[str]
-    download_limit: int  # -1 = all, N = first N PDFs per handler
+    download_limit: int  # -1 = all, N = first N PDFs per scraper/type
+    download_all: bool
 
 
 def load_runtime_config(
@@ -43,6 +45,7 @@ def load_runtime_config(
     api_key_override: Optional[str] = None,
     llm_script_override: Optional[str] = None,
     download_limit_override: Optional[int] = None,
+    download_all_override: Optional[bool] = None,
 ) -> RuntimeConfig:
     """
     Resolve runtime config from .env + CLI overrides.
@@ -56,6 +59,7 @@ def load_runtime_config(
     - OPENAI_API_KEY
     - LLM_SCRIPT_PATH
     - DOWNLOAD_LIMIT
+    - DOWNLOAD_ALL
     """
     load_dotenv(dotenv_path=Path(__file__).with_name(".env"), override=False)
 
@@ -68,12 +72,25 @@ def load_runtime_config(
     api_key = (api_key_override or os.getenv("OPENAI_API_KEY") or "").strip()
     llm_script_path = (llm_script_override or os.getenv("LLM_SCRIPT_PATH") or "").strip() or None
 
+    if download_all_override is not None:
+        download_all = download_all_override
+    else:
+        env_download_all = os.getenv("DOWNLOAD_ALL", "").strip().lower()
+        download_all = (
+            env_download_all in {"1", "true", "yes", "y", "on"}
+            if env_download_all
+            else DOWNLOAD_ALL
+        )
+
     # Download limit
     if download_limit_override is not None:
         dl_limit = download_limit_override
     else:
         env_limit = os.getenv("DOWNLOAD_LIMIT", "").strip()
         dl_limit = int(env_limit) if env_limit else DOWNLOAD_LIMIT
+
+    if download_all:
+        dl_limit = -1
 
     if not vm_mode and not api_key:
         raise SystemExit(
@@ -87,4 +104,5 @@ def load_runtime_config(
         api_key=api_key,
         llm_script_path=llm_script_path,
         download_limit=dl_limit,
+        download_all=download_all or dl_limit == -1,
     )

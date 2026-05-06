@@ -5,7 +5,8 @@ Run the complete pipeline: download PDFs → extract data → map → export.
 
     python main.py                        # full run (download 5 each → extract → map)
     python main.py --download-limit -1    # download ALL PDFs
-    python main.py --download-limit 10    # download 10 per handler
+    python main.py --download-all         # download ALL PDFs
+    python main.py --download-limit 10    # download 10 per scraper/type
     python main.py --skip-download        # skip download, use existing PDFs
     python main.py --skip-effectiveness   # Module 1 only
     python main.py --pdf path/to/file.pdf # single PDF (Module 1 only)
@@ -15,6 +16,7 @@ Run the complete pipeline: download PDFs → extract data → map → export.
 
 Default execution mode: vm  (set EXECUTION_TARGET in config.py to change)
 Default download limit: 5   (set DOWNLOAD_LIMIT in config.py or use --download-limit)
+Download all switch: False  (set DOWNLOAD_ALL=True or use --download-all)
 Missing input/output folders are created automatically.
 
 Pipeline Flow
@@ -57,12 +59,7 @@ import pandas as pd
 
 from config import load_runtime_config
 from pipeline.tracker import PipelineTracker
-from pipeline.downloader import (
-    download_cmets_pdfs,
-    download_jcc_pdfs,
-    download_effectiveness_pdfs,
-    download_bayallocation_pdfs,
-)
+from pipeline.downloader import run_download_subpipeline
 from pipeline.cmets_handler         import run_cmets_extraction
 from pipeline.effectiveness_handler import run_effectiveness_extraction
 from pipeline.mapping_handler       import run_mapping
@@ -92,6 +89,7 @@ REQUIRED_FOLDERS = [
     (_START_DIR / "output" / "jcc_cache",                    "JCC JSON cache"),
     (_START_DIR / "source" / "bayallocation",                "Bay Allocation PDF input"),
     (_START_DIR / "output" / "bayallocation_cache",          "Bay Allocation JSON cache"),
+    (_START_DIR / "output" / "uploads",                      "Downloaded PDF root"),
     (_START_DIR / "excels",                                  "Generated Excel reports"),
 ]
 
@@ -113,6 +111,15 @@ def _skip(label: str, path: str | Path) -> bool:
         print(f"[Pipeline] SKIP  {label} — {p.name} already exists\n")
         return True
     return False
+
+
+def _default_pdf_source(download_relative: str, legacy_path: str | Path) -> Path:
+    """Prefer PDFs downloaded by the new sub-pipeline; fall back to old source dirs."""
+    downloaded = _START_DIR / "output" / download_relative
+    legacy = Path(legacy_path)
+    if any(downloaded.rglob("*.pdf")):
+        return downloaded
+    return legacy
 
 
 # --- CLI ---------------------------------------------------------------------
@@ -149,7 +156,15 @@ def _build_args() -> argparse.Namespace:
     p.add_argument("--skip-download",    action="store_true",
                    help="Skip PDF download phase, use existing PDFs only")
     p.add_argument("--download-limit",   type=int, default=None,
-                   help="Max PDFs to download per handler (-1=all, default=5)")
+                   help="Max PDFs to download per scraper/type (-1=all, default=5)")
+    p.add_argument("--download-all",     action="store_true", default=None,
+                   help="Download every available PDF from each scraper")
+    p.add_argument("--download-output-dir", default=None, metavar="DIR",
+                   help="PDF download root (default: output/; original uploads/ layout is kept inside it)")
+    p.add_argument("--download-scrapers", default=None, metavar="LIST",
+                   help="Comma-separated scraper keys to run (default: all copied scrapers)")
+    p.add_argument("--pfccl-query",      default=None, metavar="TEXT",
+                   help="Tender title substring for the PFCCLINDIA scraper")
     p.add_argument("--mode",             choices=["vm", "laptop"], default=None,
                    help="Override execution mode (default: vm)")
     p.add_argument("--api-key",          default=None,
@@ -211,61 +226,30 @@ def _show_status(tracker: PipelineTracker) -> None:
 def _run_downloads(runtime, tracker: PipelineTracker, args) -> dict:
     """Phase 0: Download PDFs for each handler type."""
     limit = runtime.download_limit
+    output_root = Path(args.download_output_dir).resolve() if args.download_output_dir else _START_DIR / "output"
+    selected = None
+    if args.download_scrapers:
+        selected = [part.strip() for part in args.download_scrapers.split(",") if part.strip()]
 
     print("\n" + "=" * 64)
     print("  PHASE 0 — PDF DOWNLOAD")
-    print(f"  Download limit: {limit} per handler ('–1' = all)")
+    print(f"  Download root : {output_root}")
+    print(f"  Download limit: {limit} per scraper/type (-1 = all)")
     print("=" * 64)
 
-    results = {}
-
-    # CMETS
-    cmets_dir = args.source_dir or str(_START_DIR / "source" / "cmets_pdfs")
-    print(f"\n  [CMETS] Downloading to {cmets_dir} ...")
     try:
-        count = download_cmets_pdfs(cmets_dir, limit=limit, tracker=tracker)
-        results["cmets"] = count
-        print(f"  [CMETS] Downloaded: {count} PDFs")
+        results = run_download_subpipeline(
+            output_root=output_root,
+            limit=limit,
+            download_all=runtime.download_all,
+            tracker=tracker,
+            scrapers=selected,
+            pfccl_query=args.pfccl_query,
+        )
     except Exception:
-        logging.error("CMETS download failed.")
+        logging.error("Download sub-pipeline failed.")
         traceback.print_exc()
-        results["cmets"] = 0
-
-    # JCC
-    jcc_dir = args.jcc_source_dir or str(_START_DIR / "source" / "jcc_pdfs")
-    print(f"\n  [JCC] Downloading to {jcc_dir} ...")
-    try:
-        count = download_jcc_pdfs(jcc_dir, limit=limit, tracker=tracker)
-        results["jcc"] = count
-        print(f"  [JCC] Downloaded: {count} PDFs")
-    except Exception:
-        logging.error("JCC download failed.")
-        traceback.print_exc()
-        results["jcc"] = 0
-
-    # Effectiveness
-    eff_dir = args.effective_dir or str(_START_DIR / "source" / "effectiveness_pdfs")
-    print(f"\n  [EFFECTIVENESS] Downloading to {eff_dir} ...")
-    try:
-        count = download_effectiveness_pdfs(eff_dir, limit=limit, tracker=tracker)
-        results["effectiveness"] = count
-        print(f"  [EFFECTIVENESS] Downloaded: {count} PDFs")
-    except Exception:
-        logging.error("Effectiveness download failed.")
-        traceback.print_exc()
-        results["effectiveness"] = 0
-
-    # Bay Allocation
-    bay_dir = args.bay_source_dir or str(_START_DIR / "source" / "bayallocation")
-    print(f"\n  [BAY ALLOCATION] Downloading to {bay_dir} ...")
-    try:
-        count = download_bayallocation_pdfs(bay_dir, limit=limit, tracker=tracker)
-        results["bayallocation"] = count
-        print(f"  [BAY ALLOCATION] Downloaded: {count} PDFs")
-    except Exception:
-        logging.error("Bay Allocation download failed.")
-        traceback.print_exc()
-        results["bayallocation"] = 0
+        results = {}
 
     total = sum(results.values())
     print(f"\n  DOWNLOAD PHASE COMPLETE — {total} PDFs downloaded total")
@@ -290,8 +274,13 @@ def _run_extraction(runtime, tracker: PipelineTracker, args) -> None:
         print("\n[Pipeline] Module 1 — CMETS extraction (Minutes only)")
 
         # Use only the minutes/ subfolder for extraction
-        cmets_src = Path(
-            args.source_dir or str(_START_DIR / "source" / "cmets_pdfs" / "minutes")
+        cmets_src = (
+            Path(args.source_dir)
+            if args.source_dir
+            else _default_pdf_source(
+                "uploads/CTUIL-ISTS-CMETS/minutes",
+                _START_DIR / "source" / "cmets_pdfs" / "minutes",
+            )
         )
         for pdf in sorted(cmets_src.glob("*.pdf")):
             if not tracker.is_extracted("cmets", pdf.name):
@@ -324,6 +313,13 @@ def _run_extraction(runtime, tracker: PipelineTracker, args) -> None:
     # ── Module 2: Effectiveness extraction ────────────────────────────────────
     eff_excel = str(excels_dir / "02_effectiveness_extracted.xlsx")
     eff_df    = pd.DataFrame()
+    eff_source_dir = (
+        args.effective_dir
+        or str(_default_pdf_source(
+            "uploads/CTUIL-Regenerators-Effective-Date-wise",
+            _START_DIR / "source" / "effectiveness_pdfs",
+        ))
+    )
 
     if _skip("Module 2", eff_excel):
         try:
@@ -333,7 +329,7 @@ def _run_extraction(runtime, tracker: PipelineTracker, args) -> None:
     else:
         try:
             eff_df = run_effectiveness_extraction(
-                source_dir = args.effective_dir,
+                source_dir = eff_source_dir,
                 output_dir = args.eff_output_dir,
                 excel_path = eff_excel,
                 runtime    = runtime,
@@ -366,13 +362,20 @@ def _run_extraction(runtime, tracker: PipelineTracker, args) -> None:
     # ── Module 4: JCC extraction + Output Layer + Layer 4 ─────────────────────
     jcc_excel    = str(excels_dir / "04_jcc_extracted.xlsx")
     layer4_excel = str(excels_dir / "04_cmets_jcc_mapped.xlsx")
+    jcc_source_dir = (
+        args.jcc_source_dir
+        or str(_default_pdf_source(
+            "uploads/CTUIL-ISTS-JCC",
+            _START_DIR / "source" / "jcc_pdfs",
+        ))
+    )
 
     if Path(jcc_excel).exists() and Path(layer4_excel).exists():
         print("[Pipeline] SKIP  Module 4 — 04_jcc_extracted.xlsx / 04_cmets_jcc_mapped.xlsx already exist\n")
     else:
         try:
             jcc_df = run_jcc_extraction(
-                source_dir               = args.jcc_source_dir,
+                source_dir               = jcc_source_dir,
                 output_dir               = args.jcc_output_dir,
                 excel_path               = jcc_excel,
                 runtime                  = runtime,
@@ -394,13 +397,20 @@ def _run_extraction(runtime, tracker: PipelineTracker, args) -> None:
 
     # ── Module 5: Bay Allocation extraction ───────────────────────────────────
     bay_excel = str(excels_dir / "05_bayallocation_extracted.xlsx")
+    bay_source_dir = (
+        args.bay_source_dir
+        or str(_default_pdf_source(
+            "uploads/CTUIL-Renewable-Energy/Bays Allocation",
+            _START_DIR / "source" / "bayallocation",
+        ))
+    )
 
     if _skip("Module 5", bay_excel):
         bay_df = pd.DataFrame()
     else:
         try:
             bay_df = run_bayallocation_extraction(
-                source_dir = args.bay_source_dir,
+                source_dir = bay_source_dir,
                 output_dir = args.bay_output_dir,
                 excel_path = bay_excel,
                 runtime    = runtime,
@@ -475,6 +485,7 @@ def main() -> None:
         api_key_override       = args.api_key,
         llm_script_override    = args.llm_script,
         download_limit_override= args.download_limit,
+        download_all_override  = args.download_all,
     )
 
     tracker = PipelineTracker()
@@ -495,6 +506,8 @@ def main() -> None:
     print("=" * 64)
     print(f"  Mode             : {runtime.execution_target}")
     print(f"  Download limit   : {runtime.download_limit}")
+    print(f"  Download all     : {runtime.download_all}")
+    print(f"  Download root    : {args.download_output_dir or str(_START_DIR / 'output')}")
     print(f"  Skip download    : {args.skip_download}")
     print(f"  Skip Module 2-6  : {args.skip_effectiveness}")
     print(f"  Tracker DB       : {tracker.db_path}")
