@@ -240,6 +240,8 @@ def _run_downloads(runtime, tracker: PipelineTracker, args) -> dict:
     print(f"  Download limit: {limit} per scraper/type (-1 = all)")
     print("=" * 64)
 
+    proxy_url = runtime.proxy_url if runtime.vm_mode and runtime.proxy_enabled else None
+
     try:
         results = run_download_subpipeline(
             output_root=output_root,
@@ -248,6 +250,7 @@ def _run_downloads(runtime, tracker: PipelineTracker, args) -> dict:
             tracker=tracker,
             scrapers=selected,
             pfccl_query=args.pfccl_query,
+            proxy_url=proxy_url,
         )
     except Exception:
         logging.error("Download sub-pipeline failed.")

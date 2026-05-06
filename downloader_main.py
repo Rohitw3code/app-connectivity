@@ -39,6 +39,8 @@ def main() -> None:
     if args.download_scrapers:
         selected = [part.strip() for part in args.download_scrapers.split(",") if part.strip()]
 
+    proxy_url = runtime.proxy_url if runtime.vm_mode and runtime.proxy_enabled else None
+
     with PipelineTracker() as tracker:
         results = run_download_subpipeline(
             output_root=output_root,
@@ -47,6 +49,7 @@ def main() -> None:
             tracker=tracker,
             scrapers=selected,
             pfccl_query=args.pfccl_query,
+            proxy_url=proxy_url,
         )
 
     total = sum(results.values()) if results else 0

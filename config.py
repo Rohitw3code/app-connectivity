@@ -26,6 +26,10 @@ EXECUTION_TARGET = "vm"   # default: use VM script mode (change to "laptop" for 
 DOWNLOAD_LIMIT = 5  # default: 5 PDFs per scraper/type
 DOWNLOAD_ALL = False  # True downloads every available PDF and ignores DOWNLOAD_LIMIT
 
+# Proxy settings for VM downloader
+PROXY_ENABLED = False
+PROXY_URL = "http://cloudproxy.adani.com:8080"
+
 
 @dataclass(frozen=True)
 class RuntimeConfig:
@@ -37,6 +41,8 @@ class RuntimeConfig:
     llm_script_path: Optional[str]
     download_limit: int  # -1 = all, N = first N PDFs per scraper/type
     download_all: bool
+    proxy_enabled: bool
+    proxy_url: str
 
 
 def load_runtime_config(
@@ -82,6 +88,15 @@ def load_runtime_config(
             else DOWNLOAD_ALL
         )
 
+    # Proxy settings
+    env_proxy_enabled = os.getenv("PROXY_ENABLED", "").strip().lower()
+    proxy_enabled = (
+        env_proxy_enabled in {"1", "true", "yes", "y", "on"}
+        if env_proxy_enabled
+        else PROXY_ENABLED
+    )
+    proxy_url = os.getenv("PROXY_URL", "").strip() or PROXY_URL
+
     # Download limit
     if download_limit_override is not None:
         dl_limit = download_limit_override
@@ -105,4 +120,6 @@ def load_runtime_config(
         llm_script_path=llm_script_path,
         download_limit=dl_limit,
         download_all=download_all or dl_limit == -1,
+        proxy_enabled=proxy_enabled,
+        proxy_url=proxy_url,
     )

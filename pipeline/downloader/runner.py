@@ -102,6 +102,49 @@ def _patched_attrs(module: ModuleType, patches: dict[str, object]):
                 setattr(module, name, value)
 
 
+@contextmanager
+def _proxy_context(proxy_url: str | None):
+    if not proxy_url:
+        yield
+        return
+
+    original_env = {
+        "HTTP_PROXY": os.getenv("HTTP_PROXY"),
+        "HTTPS_PROXY": os.getenv("HTTPS_PROXY"),
+        "http_proxy": os.getenv("http_proxy"),
+        "https_proxy": os.getenv("https_proxy"),
+    }
+    os.environ["HTTP_PROXY"] = proxy_url
+    os.environ["HTTPS_PROXY"] = proxy_url
+    os.environ["http_proxy"] = proxy_url
+    os.environ["https_proxy"] = proxy_url
+
+    try:
+        import aiohttp  # local import to avoid hard dependency at module import time
+    except Exception:
+        aiohttp = None
+
+    original_session = getattr(aiohttp, "ClientSession", None) if aiohttp else None
+
+    if aiohttp and original_session:
+        def _client_session_with_proxy(*args, **kwargs):
+            kwargs.setdefault("trust_env", True)
+            return original_session(*args, **kwargs)
+
+        aiohttp.ClientSession = _client_session_with_proxy  # type: ignore[assignment]
+
+    try:
+        yield
+    finally:
+        if aiohttp and original_session:
+            aiohttp.ClientSession = original_session  # type: ignore[assignment]
+        for key, value in original_env.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+
+
 def _limit_mapping_values(mapping: dict, limit: int) -> dict:
     if limit < 0:
         return mapping
@@ -237,6 +280,7 @@ def run_scraper(
     download_all: bool = False,
     tracker=None,
     pfccl_query: str | None = None,
+    proxy_url: str | None = None,
 ) -> int:
     """Run one copied scraper and return the number of newly saved PDFs."""
     root = Path(output_root).resolve() if output_root else DEFAULT_DOWNLOAD_ROOT
@@ -257,7 +301,8 @@ def run_scraper(
         if seeded:
             print(f"  [{spec.label}] cached existing PDFs: {seeded}")
         with _patched_attrs(module, patches):
-            _run_module_main(module, spec, pfccl_query)
+            with _proxy_context(proxy_url):
+                _run_module_main(module, spec, pfccl_query)
         after = _count_pdfs(output_dir)
 
     _register_new_downloads(tracker, spec.handler, before, after)
@@ -274,6 +319,7 @@ def run_download_subpipeline(
     tracker=None,
     scrapers: Iterable[str] | None = None,
     pfccl_query: str | None = None,
+    proxy_url: str | None = None,
 ) -> dict[str, int]:
     """Run the download phase for every selected scraper."""
     selected = list(scrapers) if scrapers else [spec.key for spec in SCRAPER_SPECS]
@@ -292,6 +338,7 @@ def run_download_subpipeline(
                 download_all=download_all,
                 tracker=tracker,
                 pfccl_query=pfccl_query,
+                proxy_url=proxy_url,
             )
         except Exception as exc:
             print(f"  [{spec.label}] FAILED: {exc}")
