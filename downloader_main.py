@@ -35,7 +35,7 @@ def main() -> None:
     )
 
     output_root = Path(args.download_output_dir).resolve() if args.download_output_dir else _START_DIR / "output"
-    selected = None
+    selected = ["cmets", "jcc", "effectiveness", "bayallocation"]
     if args.download_scrapers:
         selected = [part.strip() for part in args.download_scrapers.split(",") if part.strip()]
 
