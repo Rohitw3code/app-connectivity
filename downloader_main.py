@@ -40,6 +40,7 @@ def main() -> None:
         selected = [part.strip() for part in args.download_scrapers.split(",") if part.strip()]
 
     proxy_url = runtime.proxy_url if runtime.vm_mode and runtime.proxy_enabled else None
+    proxy_insecure_ssl = bool(runtime.proxy_insecure_ssl)
 
     with PipelineTracker() as tracker:
         results = run_download_subpipeline(
@@ -50,6 +51,7 @@ def main() -> None:
             scrapers=selected,
             pfccl_query=args.pfccl_query,
             proxy_url=proxy_url,
+            proxy_insecure_ssl=proxy_insecure_ssl,
         )
 
     total = sum(results.values()) if results else 0

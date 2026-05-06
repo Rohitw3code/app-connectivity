@@ -29,6 +29,7 @@ DOWNLOAD_ALL = False  # True downloads every available PDF and ignores DOWNLOAD_
 # Proxy settings for VM downloader
 PROXY_ENABLED = False
 PROXY_URL = "http://cloudproxy.adani.com:8080"
+PROXY_INSECURE_SSL = True
 
 
 @dataclass(frozen=True)
@@ -43,6 +44,7 @@ class RuntimeConfig:
     download_all: bool
     proxy_enabled: bool
     proxy_url: str
+    proxy_insecure_ssl: bool
 
 
 def load_runtime_config(
@@ -96,6 +98,12 @@ def load_runtime_config(
         else PROXY_ENABLED
     )
     proxy_url = os.getenv("PROXY_URL", "").strip() or PROXY_URL
+    env_proxy_insecure = os.getenv("PROXY_INSECURE_SSL", "").strip().lower()
+    proxy_insecure_ssl = (
+        env_proxy_insecure in {"1", "true", "yes", "y", "on"}
+        if env_proxy_insecure
+        else PROXY_INSECURE_SSL
+    )
 
     # Download limit
     if download_limit_override is not None:
@@ -122,4 +130,5 @@ def load_runtime_config(
         download_all=download_all or dl_limit == -1,
         proxy_enabled=proxy_enabled,
         proxy_url=proxy_url,
+        proxy_insecure_ssl=proxy_insecure_ssl,
     )

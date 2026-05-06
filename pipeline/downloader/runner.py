@@ -103,7 +103,7 @@ def _patched_attrs(module: ModuleType, patches: dict[str, object]):
 
 
 @contextmanager
-def _proxy_context(proxy_url: str | None):
+def _proxy_context(proxy_url: str | None, *, insecure_ssl: bool = False):
     if not proxy_url:
         yield
         return
@@ -129,6 +129,8 @@ def _proxy_context(proxy_url: str | None):
     if aiohttp and original_session:
         def _client_session_with_proxy(*args, **kwargs):
             kwargs.setdefault("trust_env", True)
+            if insecure_ssl and "connector" not in kwargs:
+                kwargs["connector"] = aiohttp.TCPConnector(ssl=False)
             return original_session(*args, **kwargs)
 
         aiohttp.ClientSession = _client_session_with_proxy  # type: ignore[assignment]
@@ -281,6 +283,7 @@ def run_scraper(
     tracker=None,
     pfccl_query: str | None = None,
     proxy_url: str | None = None,
+    proxy_insecure_ssl: bool = False,
 ) -> int:
     """Run one copied scraper and return the number of newly saved PDFs."""
     root = Path(output_root).resolve() if output_root else DEFAULT_DOWNLOAD_ROOT
@@ -301,7 +304,7 @@ def run_scraper(
         if seeded:
             print(f"  [{spec.label}] cached existing PDFs: {seeded}")
         with _patched_attrs(module, patches):
-            with _proxy_context(proxy_url):
+            with _proxy_context(proxy_url, insecure_ssl=proxy_insecure_ssl):
                 _run_module_main(module, spec, pfccl_query)
         after = _count_pdfs(output_dir)
 
@@ -320,6 +323,7 @@ def run_download_subpipeline(
     scrapers: Iterable[str] | None = None,
     pfccl_query: str | None = None,
     proxy_url: str | None = None,
+    proxy_insecure_ssl: bool = False,
 ) -> dict[str, int]:
     """Run the download phase for every selected scraper."""
     selected = list(scrapers) if scrapers else [spec.key for spec in SCRAPER_SPECS]
@@ -339,6 +343,7 @@ def run_download_subpipeline(
                 tracker=tracker,
                 pfccl_query=pfccl_query,
                 proxy_url=proxy_url,
+                proxy_insecure_ssl=proxy_insecure_ssl,
             )
         except Exception as exc:
             print(f"  [{spec.label}] FAILED: {exc}")
