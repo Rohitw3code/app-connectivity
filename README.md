@@ -19,6 +19,12 @@ Complete reference for all extraction rules, operations, data sources, and condi
 
 ## Pipeline Overview
 
+### Entry Scripts
+
+- `main.py` — download + extract only the PDFs that are not yet marked as extracted.
+- `downloader_main.py` — download only (no extraction).
+- `extraction_main.py` — extract only pending PDFs (based on per-source tables).
+
 ```
 ┌───────────────┐   ┌─────────────────────┐   ┌────────────────┐   ┌─────────────────────┐
 │  CMETS PDFs   │   │  Effectiveness PDFs │   │   JCC PDFs     │   │ Bay Allocation PDFs │

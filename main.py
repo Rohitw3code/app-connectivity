@@ -60,6 +60,7 @@ import pandas as pd
 from config import load_runtime_config
 from pipeline.tracker import PipelineTracker
 from pipeline.downloader import run_download_subpipeline
+from pipeline.extraction_orchestrator import run_pending_extractions
 from pipeline.cmets_handler         import run_cmets_extraction
 from pipeline.effectiveness_handler import run_effectiveness_extraction
 from pipeline.mapping_handler       import run_mapping
@@ -175,6 +176,8 @@ def _build_args() -> argparse.Namespace:
                    help="Export all DB records to Excel and exit")
     p.add_argument("--status",           action="store_true",
                    help="Show tracker status and exit")
+    p.add_argument("--sources",          default=None, metavar="LIST",
+                   help="Comma-separated source keys/names to extract (default: all)")
     return p.parse_args()
 
 
@@ -528,15 +531,14 @@ def main() -> None:
             download_results = _run_downloads(runtime, tracker, args)
             total_downloaded = sum(download_results.values())
 
-        # ── Phase 1+2: Extract + Map ──────────────────────────────────────────
-        _run_extraction(runtime, tracker, args)
+        # ── Phase 1: Extract only pending PDFs ────────────────────────────────
+        only_sources = None
+        if args.sources:
+            only_sources = [part.strip() for part in args.sources.split(",") if part.strip()]
+        extraction_results = run_pending_extractions(runtime, only_sources=only_sources)
 
-        # Count excels
         total_excels = len(list((_START_DIR / "excels").glob("*.xlsx")))
-        total_extracted = sum(
-            tracker.count_extractions(h, "completed")
-            for h in ("cmets", "jcc", "effectiveness", "bayallocation")
-        )
+        total_extracted = sum(item.get("extracted", 0) for item in extraction_results)
 
         tracker.finish_run(run_id, total_downloaded, total_extracted, total_excels)
 

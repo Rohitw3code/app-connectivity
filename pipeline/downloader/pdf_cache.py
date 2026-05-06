@@ -41,6 +41,7 @@ class PdfCache:
         if self._conn is None:
             self._db_path.parent.mkdir(parents=True, exist_ok=True)
             self._conn = sqlite3.connect(self._db_path)
+            self._conn.row_factory = sqlite3.Row
             self._conn.execute("PRAGMA journal_mode=DELETE")
             self._conn.execute("PRAGMA synchronous=NORMAL")
             self._ensure_table()
@@ -59,6 +60,7 @@ class PdfCache:
                 pdf_name TEXT NOT NULL,
                 pdf_type TEXT NOT NULL DEFAULT '',
                 pdf_path TEXT NOT NULL DEFAULT '',
+                extraction_done INTEGER NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(source_name, pdf_name, pdf_type)
             )
@@ -68,6 +70,7 @@ class PdfCache:
             "source_name": "TEXT NOT NULL DEFAULT ''",
             "pdf_type": "TEXT NOT NULL DEFAULT ''",
             "pdf_path": "TEXT NOT NULL DEFAULT ''",
+            "extraction_done": "INTEGER NOT NULL DEFAULT 0",
         })
         conn.execute(
             "CREATE INDEX IF NOT EXISTS scraped_pdfs_source_idx ON scraped_pdfs (source_name)"
@@ -93,11 +96,15 @@ class PdfCache:
                 pdf_name TEXT NOT NULL,
                 pdf_type TEXT NOT NULL DEFAULT '',
                 pdf_path TEXT NOT NULL DEFAULT '',
+                extraction_done INTEGER NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(pdf_name, pdf_type)
             )
             """
         )
+        self._ensure_columns(conn, table, {
+            "extraction_done": "INTEGER NOT NULL DEFAULT 0",
+        })
         conn.execute(
             f"CREATE INDEX IF NOT EXISTS {self._source_index_name()} ON {table} (pdf_name)"
         )
@@ -135,8 +142,8 @@ class PdfCache:
     def _seed_source_table_from_generic(self, conn: sqlite3.Connection) -> None:
         conn.execute(
             f"""
-            INSERT OR IGNORE INTO {self._quoted_source_table()} (pdf_name, pdf_type, pdf_path)
-            SELECT pdf_name, pdf_type, pdf_path FROM {_TABLE_NAME}
+            INSERT OR IGNORE INTO {self._quoted_source_table()} (pdf_name, pdf_type, pdf_path, extraction_done)
+            SELECT pdf_name, pdf_type, pdf_path, extraction_done FROM {_TABLE_NAME}
             WHERE source_name = ?
             """,
             (self._source_name,),
@@ -218,20 +225,78 @@ class PdfCache:
         before = conn.total_changes
         conn.executemany(
             """
-            INSERT OR IGNORE INTO scraped_pdfs (source_key, source_name, pdf_name, pdf_type, pdf_path)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT OR IGNORE INTO scraped_pdfs (source_key, source_name, pdf_name, pdf_type, pdf_path, extraction_done)
+            VALUES (?, ?, ?, ?, ?, 0)
             """,
             [(self._source_key, self._source_name, name, pdf_type, pdf_path) for name, pdf_type, pdf_path in entries],
         )
         conn.executemany(
             f"""
-            INSERT OR IGNORE INTO {self._quoted_source_table()} (pdf_name, pdf_type, pdf_path)
-            VALUES (?, ?, ?)
+            INSERT OR IGNORE INTO {self._quoted_source_table()} (pdf_name, pdf_type, pdf_path, extraction_done)
+            VALUES (?, ?, ?, 0)
             """,
             entries,
         )
         conn.commit()
         return conn.total_changes - before
+
+    def mark_extracted(
+        self,
+        pdf_name: str,
+        pdf_type: str | None = None,
+        pdf_path: str | Path | None = None,
+    ) -> None:
+        conn = self._connect()
+        resolved_type = self._resolve_pdf_type(pdf_type, pdf_path)
+        resolved_path = str(pdf_path) if pdf_path else ""
+
+        if resolved_type:
+            conn.execute(
+                f"""
+                UPDATE {self._quoted_source_table()}
+                SET extraction_done = 1, pdf_path = COALESCE(NULLIF(?, ''), pdf_path)
+                WHERE pdf_name = ? AND pdf_type = ?
+                """,
+                (resolved_path, pdf_name, resolved_type),
+            )
+            conn.execute(
+                f"""
+                UPDATE {_TABLE_NAME}
+                SET extraction_done = 1, pdf_path = COALESCE(NULLIF(?, ''), pdf_path)
+                WHERE source_name = ? AND pdf_name = ? AND pdf_type = ?
+                """,
+                (resolved_path, self._source_name, pdf_name, resolved_type),
+            )
+        else:
+            conn.execute(
+                f"""
+                UPDATE {self._quoted_source_table()}
+                SET extraction_done = 1, pdf_path = COALESCE(NULLIF(?, ''), pdf_path)
+                WHERE pdf_name = ?
+                """,
+                (resolved_path, pdf_name),
+            )
+            conn.execute(
+                f"""
+                UPDATE {_TABLE_NAME}
+                SET extraction_done = 1, pdf_path = COALESCE(NULLIF(?, ''), pdf_path)
+                WHERE source_name = ? AND pdf_name = ?
+                """,
+                (resolved_path, self._source_name, pdf_name),
+            )
+        conn.commit()
+
+    def get_pending_extractions(self) -> list[dict]:
+        conn = self._connect()
+        rows = conn.execute(
+            f"""
+            SELECT pdf_name, pdf_type, pdf_path, extraction_done
+            FROM {self._quoted_source_table()}
+            WHERE extraction_done = 0
+            ORDER BY pdf_name
+            """,
+        ).fetchall()
+        return [dict(r) for r in rows]
 
 
 def get_pdf_cache(db_path: str | Path | None, source_key: str, source_name: str | None = None) -> PdfCache:
